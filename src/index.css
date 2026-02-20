@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-bg-app text-slate-800 antialiased font-sans;
+  }
+}
+
+@layer components {
+
+  /* Reusable UI Components */
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-md border border-white/40 rounded-2xl p-6 shadow-md;
+  }
+
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-dark text-white border-none py-3 px-6 rounded-xl font-semibold text-sm cursor-pointer transition-all duration-200 inline-flex items-center gap-2 shadow-md hover:-translate-y-0.5;
+  }
+
+  .form-control {
+    @apply w-full p-2.5 border border-slate-200 rounded-xl text-[15px] outline-none transition-all duration-200 bg-white text-slate-800 focus:border-primary focus:ring-4 focus:ring-primary/20;
+  }
+
+  .segment-btn {
+    @apply border-none bg-transparent py-2.5 px-3 text-[14px] font-medium rounded-lg text-slate-400 cursor-pointer transition-all duration-200 hover:bg-black/5 flex-1 text-center whitespace-nowrap;
+  }
+
+  .segment-btn.active {
+    @apply bg-primary text-white shadow-md font-bold;
+  }
+}
+
+/* Hide scrollbar for clean horizontal scrolling on mobile */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
