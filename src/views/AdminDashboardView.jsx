@@ -1,10 +1,11 @@
 import React from 'react';
-import { Users, UserCheck, School, CalendarDays, MessageSquare } from 'lucide-react';
+import { Users, UserCheck, School, CalendarDays, MessageSquare, MessageSquareDashed } from 'lucide-react';
 
 const INDICADORES = [
   { id: 'i1', label: 'Total de Alunos', valor: '128', icon: Users, color: 'text-primary bg-primary/10' },
-  { id: 'i2', label: 'Matrículas Ativas', valor: '112', icon: UserCheck, color: 'text-emerald-700 bg-emerald-100' },
-  { id: 'i3', label: 'Turmas Ativas', valor: '8', icon: School, color: 'text-blue-700 bg-blue-100' }
+  { id: 'i2', label: 'Turmas Ativas', valor: '8', icon: School, color: 'text-primary bg-primary/10' },
+  { id: 'i3', label: 'Eventos', valor: '8', icon: CalendarDays, color: 'text-primary bg-primary/10' },
+  { id: 'i3', label: 'Comunicados', valor: '8', icon: MessageSquareDashed, color: 'text-primary bg-primary/10' },
 ];
 
 const EVENTOS = [
@@ -27,7 +28,7 @@ export default function AdminDashboardView() {
         <p className="text-sm text-slate-500 mt-1">Visão consolidada da operação escolar.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {INDICADORES.map((item) => (
           <div key={item.id} className="glass-panel p-5 border border-slate-200/60 flex items-center gap-3">
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${item.color}`}>
