@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { auth, db } from '../config/firebase';
+import { auth, db, firebaseConfigError } from '../config/firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
+
+const VALID_ROLES = new Set(['teacher', 'parent', 'admin']);
 
 export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
@@ -13,23 +15,33 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!auth) {
+            setLoading(false);
+            return () => { };
+        }
+
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
-                // Busca a role do usuário no banco (Coleção 'users', Doc = UID)
                 try {
-                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    const userRef = doc(db, 'users', user.uid);
+                    const userDoc = await getDoc(userRef);
+
                     if (userDoc.exists()) {
-                        setUserRole(userDoc.data().role);
+                        const role = userDoc.data().role;
+                        setUserRole(VALID_ROLES.has(role) ? role : 'parent');
                     } else {
-                        // Conta não tem profile definido, fallback
+                        await setDoc(userRef, {
+                            uid: user.uid,
+                            email: user.email ?? null,
+                            role: 'parent',
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp()
+                        });
                         setUserRole('parent');
                     }
                 } catch (e) {
                     console.log("Erro ao buscar role, backend não configurado ok. " + e);
-                    // Como é MVP sem config real ainda, vamos simular que emails @colegiodirecao cai pra admin
-                    if (user.email.includes('admin')) setUserRole('admin');
-                    else if (user.email.includes('prof')) setUserRole('teacher');
-                    else setUserRole('parent');
+                    setUserRole('parent');
                 }
             } else {
                 setUserRole(null);
@@ -42,14 +54,28 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = (email, password) => {
+        if (!auth) return Promise.reject({ code: 'auth/configuration-not-found', message: firebaseConfigError });
         return signInWithEmailAndPassword(auth, email, password);
     };
 
-    const register = (email, password) => {
-        return createUserWithEmailAndPassword(auth, email, password);
+    const register = async (email, password) => {
+        if (!auth) return Promise.reject({ code: 'auth/configuration-not-found', message: firebaseConfigError });
+        if (!db) return Promise.reject({ code: 'auth/configuration-not-found', message: firebaseConfigError });
+
+        const credential = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'users', credential.user.uid), {
+            uid: credential.user.uid,
+            email: credential.user.email ?? email,
+            role: 'parent',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+
+        return credential;
     };
 
     const logout = () => {
+        if (!auth) return Promise.resolve();
         return signOut(auth);
     };
 
@@ -58,7 +84,8 @@ export const AuthProvider = ({ children }) => {
         userRole,
         login,
         register,
-        logout
+        logout,
+        authError: firebaseConfigError
     };
 
     return (

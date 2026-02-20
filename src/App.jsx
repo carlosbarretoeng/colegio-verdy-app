@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, MessageSquare, BookOpen, Settings, LogOut, Bell, User } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Calendar, MessageSquare, BookOpen, Settings, LogOut, Bell, User, School, Users } from 'lucide-react';
 
 import DashboardTurmasView from './views/DashboardTurmasView';
 import DiarioClasseView from './views/DiarioClasseView';
@@ -9,6 +9,10 @@ import ComunicacaoView from './views/ComunicacaoView';
 import LoginView from './views/LoginView';
 import ParentDashboardView from './views/ParentDashboardView';
 import AdminDashboardView from './views/AdminDashboardView';
+import AdminStudentsView from './views/AdminStudentsView';
+import AdminTeachersView from './views/AdminTeachersView';
+import AdminGuardiansView from './views/AdminGuardiansView';
+import AdminClassroomsView from './views/AdminClassroomsView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Mocks integrados
@@ -32,6 +36,12 @@ function MainApp() {
     const [selectedTurma, setSelectedTurma] = useState(null);
     const [selectedStudentId, setSelectedStudentId] = useState(null);
     const [studentsStatus, setStudentsStatus] = useState(INITIAL_STUDENTS_STATUS);
+
+    useEffect(() => {
+        if (userRole === 'admin' && !activeTab.startsWith('admin-')) {
+            setActiveTab('admin-dashboard');
+        }
+    }, [userRole, activeTab]);
 
     if (!currentUser) {
         return <LoginView />;
@@ -86,9 +96,12 @@ function MainApp() {
     const renderContent = () => {
         // Roteamento baseado no Role (Perfil)
         if (userRole === 'admin') {
-            if (activeTab === 'caderneta') return <AdminDashboardView />;
-            if (activeTab === 'calendario') return <CalendarioView />;
-            if (activeTab === 'comunicacao') return <ComunicacaoView />;
+            if (activeTab === 'admin-dashboard') return <AdminDashboardView />;
+            if (activeTab === 'admin-professores') return <AdminTeachersView />;
+            if (activeTab === 'admin-responsaveis') return <AdminGuardiansView />;
+            if (activeTab === 'admin-alunos') return <AdminStudentsView />;
+            if (activeTab === 'admin-turmas') return <AdminClassroomsView />;
+            return <AdminStudentsView />;
         }
 
         if (userRole === 'parent') {
@@ -118,16 +131,32 @@ function MainApp() {
         return 'Diário de Classe';
     };
 
-    const navItems = [
-        { id: 'caderneta', label: getNavLabel(), icon: BookOpen },
-        { id: 'calendario', label: 'Calendário', icon: Calendar },
-        { id: 'comunicacao', label: 'Mensagens', icon: MessageSquare },
-    ];
+    const navItems = userRole === 'admin'
+        ? [
+            { id: 'admin-dashboard', label: 'Dashboard', icon: Calendar },
+            { id: 'admin-professores', label: 'Professores', icon: User },
+            { id: 'admin-responsaveis', label: 'Responsáveis', icon: Users },
+            { id: 'admin-alunos', label: 'Alunos', icon: BookOpen },
+            { id: 'admin-turmas', label: 'Turmas', icon: School },
+        ]
+        : [
+            { id: 'caderneta', label: getNavLabel(), icon: BookOpen },
+            { id: 'calendario', label: 'Calendário', icon: Calendar },
+            { id: 'comunicacao', label: 'Mensagens', icon: MessageSquare },
+        ];
 
     const getHeaderTitle = () => {
+        if (userRole === 'admin') {
+            if (activeTab === 'admin-dashboard') return '';
+            if (activeTab === 'admin-professores') return 'Gestão de Professores';
+            if (activeTab === 'admin-responsaveis') return 'Gestão de Responsáveis';
+            if (activeTab === 'admin-alunos') return 'Gestão de Alunos';
+            if (activeTab === 'admin-turmas') return 'Gestão de Turmas';
+            return 'Área da Direção';
+        }
+
         if (activeTab === 'calendario') return 'Eventos e Datas';
         if (activeTab === 'comunicacao') return 'Central de Comunicação';
-        if (userRole === 'admin') return 'Área da Direção';
         if (userRole === 'parent') return 'Área da Família';
         // Teacher
         if (cadernetaStep === 'dashboard') return 'Área do Professor';
@@ -172,27 +201,13 @@ function MainApp() {
                         </button>
                     ))}
                 </nav>
-
-                <div className="mt-auto pt-6 border-t border-slate-200 flex flex-col gap-2">
-                    <button className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-[15px] text-slate-500 hover:bg-slate-50 hover:text-primary transition-colors">
-                        <Settings size={20} /> Configurações
-                    </button>
-                    <button onClick={logout} className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-[15px] text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors">
-                        <LogOut size={20} /> Sair
-                    </button>
-                </div>
             </aside>
 
             {/* Main Content Area */}
             <main className="flex-1 flex flex-col pt-16 lg:pt-0 overflow-hidden relative">
                 {/* Desktop Topbar */}
                 <header className="hidden lg:flex h-20 items-center justify-between px-8 bg-white border-b border-slate-200 shrink-0">
-                    <div>
-                        <h3 className="text-xl font-semibold text-slate-800">
-                            {getHeaderTitle()}
-                        </h3>
-                    </div>
-                    <div className="flex items-center gap-6">
+                    <div className="flex ml-auto items-center gap-6">
                         <button className="p-2 text-slate-500 hover:text-primary hover:bg-slate-50 rounded-full transition-colors"><Bell size={20} /></button>
                         <div className="flex items-center gap-3 cursor-pointer select-none" onClick={logout}>
                             <div className="w-11 h-11 rounded-full bg-slate-100 border-2 border-white shadow-sm flex items-center justify-center text-slate-500">

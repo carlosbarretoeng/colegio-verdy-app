@@ -1,0 +1,12 @@
+{
+  "name": "colegio-verdy-app",
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "Colégio Verdy (Vite)",
+      "onAutoForward": "openPreview",
+      "visibility": "public",
+      "protocol": "http"
+    }
+  }
+}

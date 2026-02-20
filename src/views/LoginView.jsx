@@ -9,7 +9,7 @@ const LoginView = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const { login, register } = useAuth();
+    const { login, register, authError } = useAuth();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -29,6 +29,8 @@ const LoginView = () => {
                 setError('Este e-mail já está cadastrado no sistema.');
             } else if (err.code === 'auth/weak-password') {
                 setError('A senha deve ter pelo menos 6 caracteres.');
+            } else if (err.code === 'auth/configuration-not-found') {
+                setError(err.message || 'Firebase não configurado para autenticação.');
             } else {
                 setError('Ocorreu um erro ao comunicar com o servidor!');
             }
@@ -48,6 +50,13 @@ const LoginView = () => {
                 </div>
 
                 <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-xl shadow-slate-200/50">
+
+                    {authError && (
+                        <div className="bg-amber-50 text-amber-700 p-4 rounded-xl mb-6 flex items-start gap-3 text-sm">
+                            <AlertCircle className="shrink-0 mt-0.5" size={18} />
+                            <span>{authError}</span>
+                        </div>
+                    )}
 
                     {error && (
                         <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 flex items-start gap-3 text-sm">
