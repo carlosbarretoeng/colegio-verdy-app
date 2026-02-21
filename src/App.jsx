@@ -181,8 +181,40 @@ function MainApp() {
                 </div>
                 <div className="flex items-center gap-3">
                     <button className="text-slate-500 hover:text-primary"><Bell size={20} /></button>
-                    <div onClick={logout} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 cursor-pointer">
-                        <LogOut size={16} className="text-red-500" />
+                    <div ref={userMenuRef} className="relative">
+                        <button
+                            onClick={() => setIsUserMenuOpen((prev) => !prev)}
+                            className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-slate-500"
+                        >
+                            {userAvatar ? (
+                                <img src={userAvatar} alt={userDisplayName} className="w-full h-full object-cover" />
+                            ) : (
+                                <User size={18} />
+                            )}
+                        </button>
+
+                        {isUserMenuOpen && (
+                            <div className="absolute right-0 top-[calc(100%+8px)] w-56 rounded-xl border border-slate-200 bg-white shadow-lg p-2 z-20">
+                                <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                                    <div className="text-xs font-semibold text-slate-800 truncate">{userDisplayName}</div>
+                                    <div className="text-[11px] text-slate-500 truncate">{userDisplayEmail || 'Conta ativa'}</div>
+                                </div>
+                                <button
+                                    onClick={handleOpenProfile}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                    <User size={16} />
+                                    Meu perfil
+                                </button>
+                                <button
+                                    onClick={logout}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50"
+                                >
+                                    <LogOut size={16} />
+                                    Sair do sistema
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

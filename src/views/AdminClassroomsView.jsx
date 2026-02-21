@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Ban, CheckCircle, Pencil, Users } from 'lucide-react';
+import { BookOpen, Filter, Pencil, Plus, ShieldCheck, ShieldMinus, Users, X } from 'lucide-react';
 import {
   addDoc,
   collection,
@@ -27,6 +27,7 @@ export default function AdminClassroomsView() {
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
+  const [mostrarFiltrosMobile, setMostrarFiltrosMobile] = useState(false);
   const [pagina, setPagina] = useState(1);
   const [salvandoTurma, setSalvandoTurma] = useState(false);
   const [salvandoVinculo, setSalvandoVinculo] = useState(false);
@@ -298,9 +299,26 @@ export default function AdminClassroomsView() {
       <div className="glass-panel p-5 border border-slate-200/60">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-slate-800">Turmas</h3>
-          <button onClick={mostrarFormTurma ? fecharFormTurma : abrirNovaTurma} className="h-9 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors">
-            {mostrarFormTurma ? 'Cancelar' : 'Adicionar turma'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMostrarFiltrosMobile((prev) => !prev)}
+              className={`md:hidden h-9 w-9 rounded-lg border transition-colors inline-flex items-center justify-center ${mostrarFiltrosMobile ? 'bg-primary text-white border-primary' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'}`}
+              aria-label="Filtros"
+            >
+              <Filter size={16} />
+            </button>
+            <button
+              onClick={mostrarFormTurma ? fecharFormTurma : abrirNovaTurma}
+              className="md:hidden h-9 w-9 rounded-lg text-white bg-primary hover:bg-primary-dark transition-colors inline-flex items-center justify-center"
+              aria-label="Adicionar turma"
+            >
+              {mostrarFormTurma ? <X size={16} /> : <Plus size={16} />}
+              
+            </button>
+            <button onClick={mostrarFormTurma ? fecharFormTurma : abrirNovaTurma} className="hidden md:inline-flex h-9 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors items-center">
+              {mostrarFormTurma ? 'Cancelar' : 'Adicionar turma'}
+            </button>
+          </div>
         </div>
 
         {mostrarFormTurma && (
@@ -338,7 +356,7 @@ export default function AdminClassroomsView() {
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row gap-3 mb-4">
+        <div className={`${mostrarFiltrosMobile ? 'flex' : 'hidden'} flex-col md:flex md:flex-row gap-3 mb-4`}>
           <input value={filtroNome} onChange={(e) => { setFiltroNome(e.target.value); setPagina(1); }} placeholder="Buscar por turma" className="form-control !py-2.5" />
           <select value={filtroStatus} onChange={(e) => { setFiltroStatus(e.target.value); setPagina(1); }} className="form-control !py-2.5">
             <option value="todos">Todos os status</option>
@@ -362,23 +380,20 @@ export default function AdminClassroomsView() {
               <div className="text-sm text-slate-500">Carregando alunos...</div>
             ) : (
               <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-slate-500">
-                    Alunos vinculados: {alunosDaTurma.length}
-                  </div>
+                <div className="flex items-center justify-end">
                   <button
                     onClick={() => setMostrarModalVinculo(true)}
-                    className="h-9 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors"
+                    className="h-9 w-full md:w-auto px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors"
                   >
                     Buscar e vincular aluno
                   </button>
                 </div>
 
                 <div className="rounded-lg border border-slate-200 p-3">
-                  <div className="text-sm font-semibold text-slate-700 mb-2">Alunos da turma</div>
-                  <div className="grid grid-cols-3 gap-2 max-h-80 overflow-y-auto">
+                  <div className="text-sm font-semibold text-slate-700 mb-2">Alunos da turma: {alunosDaTurma.length}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 max-h-80 overflow-y-auto">
                     {alunosDaTurma.map((aluno) => (
-                      <div key={aluno.id} className="flex items-center justify-between bg-slate-100 gap-3 rounded-lg border-1 border-slate-300 px-3 py-2">
+                      <div key={aluno.id} className="flex items-center justify-between bg-slate-100 gap-3 rounded-lg border shadown-md border-slate-300 px-3 py-2">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
                             {aluno.fotoUrl ? (
@@ -418,7 +433,7 @@ export default function AdminClassroomsView() {
           <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-xl p-4 md:p-5">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-base font-bold text-slate-800">Vincular aluno à turma {turmaGerenciada.nome}</h4>
+                <h4 className="text-base font-bold text-slate-800">{turmaGerenciada.nome}</h4>
                 <button
                   onClick={() => {
                     setMostrarModalVinculo(false);
@@ -486,37 +501,41 @@ export default function AdminClassroomsView() {
         {carregando && <div className="py-6 text-sm text-slate-500">Carregando turmas...</div>}
 
         {!carregando && paginadas.map((turma) => (
-          <div key={turma.id} className="py-3 border-b border-slate-100 last:border-b-0 text-slate-700 grid grid-cols-5 md:grid-cols-12 gap-3 items-center">
-            <div className="md:col-span-2 flex flex-wrap mdgap-2">
-              <button onClick={() => abrirEditarTurma(turma)} className="h-8 px-2 rounded-lg text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors inline-flex items-center gap-1">
-                <Pencil size={12} /> Editar
-              </button>
-              <button onClick={() => handleToggleStatusTurma(turma.id)} className={`h-8 px-2 rounded-lg text-xs font-medium transition-colors ${turma.status === 'ativa' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
-                {turma.status === 'ativa' ? 'Inativar' : 'Ativar'}
-              </button>
-            </div>
-
-            <div className="col-span-3 md:col-span-5 min-w-0">
-              <div className="font-medium text-slate-800 truncate">{turma.nome}</div>
-              <div className="text-sm text-slate-500 truncate">{turma.periodo || 'Sem período'}</div>
-            </div>
-
-            <div className="col-span-3 md:col-span-2 min-w-0">
-              <div className="text-sm text-slate-500 truncate">{turma.professorNome || 'Não definido'}</div>
-            </div>
-
-            <div className="col-span-2 md:text-right">
-              <button onClick={() => handleGerenciarTurma(turma.id)} className="h-8 px-2 rounded-lg text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors inline-flex items-center gap-1">
-                <Users size={12} /> Vincular alunos
-              </button>
-            </div>
-
-            <div className="col-span-1 md:text-right">
-              <div className={`text-xs text-center px-2 py-1 min-h-6 rounded-full font-semibold ${turma.status === 'ativa' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                <span className='hidden md:block'>{turma.status}</span>
-                { turma.status !== 'ativa' && <div className='block flex items-center justify-center md:hidden'><Ban/></div> }
-                { turma.status === 'ativa' && <div className='block flex items-center justify-center md:hidden'><CheckCircle/></div> }
+          <div key={turma.id} className={`mb-2 rounded-lg bg-slate-100 border border-slate-200 shadow-md text-slate-700 ${turma.status === 'ativa' ? 'border-l-8 border-l-emerald-500' : 'border-l-8 border-l-red-500'}`}>
+            <div className="flex gap-3 md:items-center md:gap-3">
+              <div className="flex hidden md:flex items-center gap-2 flex-wrap col-span-2 p-2">
+                <button onClick={() => abrirEditarTurma(turma)} className="w-16 px-2 rounded-md p-1 text-xs font-medium text-slate-700 bg-slate-200 border border-slate-300 hover:bg-slate-200 transition-colors flex flex-col items-center gap-1">
+                  <Pencil />
+                  Editar
+                </button>
+                <button onClick={() => handleGerenciarTurma(turma.id)} className="w-16 px-2 rounded-md p-1 text-xs font-medium text-primary bg-primary/15 border border-primary/30 hover:bg-primary/35 transition-colors flex flex-col items-center gap-1">
+                  <BookOpen />
+                  Alunos
+                </button>
+                <button onClick={() => handleToggleStatusTurma(turma.id)} className={`w-16 px-2 rounded-md p-1 text-xs font-medium transition-colors flex flex-col items-center gap-1 ${turma.status === 'ativa' ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-700' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-700'}`}>
+                  {turma.status === 'ativa' ? <ShieldMinus /> : <ShieldCheck />}
+                  {turma.status === 'ativa' ? 'Inativar' : 'Ativar'}
+                </button>
               </div>
+
+              <div className="md:grow min-w-0 md:col-span-6 gap-3 my-3">
+                <div className="ps-2">
+                  <div className="font-medium text-slate-800 truncate">{turma.nome} - {turma.periodo || 'Sem período'}</div>
+                  <div className="text-sm text-slate-500 truncate">{turma.professorNome || 'Não definido'}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 md:hidden p-1">
+              <button onClick={() => abrirEditarTurma(turma)} className="h-8 px-2 rounded-s-md text-xs font-medium text-primary border border-primary border-r-0 inline-flex justify-center items-center gap-1">
+                <Pencil />
+              </button>
+              <button onClick={() => handleGerenciarTurma(turma.id)} className="h-8 px-2 text-xs font-medium text-slate-700 border border-primary justify-center inline-flex items-center gap-1">
+                <Users />
+              </button>
+              <button onClick={() => handleToggleStatusTurma(turma.id)} className={`h-8 px-2 rounded-e-lg text-xs font-medium border border-primary border-l-0 inline-flex justify-center items-center gap-1 ${turma.status === 'ativa' ? 'text-red-600' : 'text-emerald-700'}`}>
+                {turma.status === 'ativa' ? <ShieldMinus /> : <ShieldCheck />}
+              </button>
             </div>
           </div>
         ))}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Ban, CheckCircle, Pencil } from 'lucide-react';
+import { Filter, Pencil, Plus, ShieldCheck, ShieldMinus, X } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import {
@@ -59,6 +59,7 @@ export default function AdminTeachersView() {
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroDisciplina, setFiltroDisciplina] = useState('todas');
+  const [mostrarFiltrosMobile, setMostrarFiltrosMobile] = useState(false);
   const [pagina, setPagina] = useState(1);
   const [salvandoProfessor, setSalvandoProfessor] = useState(false);
   const [carregando, setCarregando] = useState(true);
@@ -234,9 +235,25 @@ export default function AdminTeachersView() {
       <div className="glass-panel p-5 border border-slate-200/60">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-slate-800">Professores</h3>
-          <button onClick={mostrarFormProfessor ? fecharFormProfessor : abrirNovoProfessor} className="h-9 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors">
-            {mostrarFormProfessor ? 'Cancelar' : 'Adicionar professor'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMostrarFiltrosMobile((prev) => !prev)}
+              className={`md:hidden h-9 w-9 rounded-lg border transition-colors inline-flex items-center justify-center ${mostrarFiltrosMobile ? 'bg-primary text-white border-primary' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'}`}
+              aria-label="Filtros"
+            >
+              <Filter size={16} />
+            </button>
+            <button
+              onClick={mostrarFormProfessor ? fecharFormProfessor : abrirNovoProfessor}
+              className="md:hidden h-9 w-9 rounded-lg text-white bg-primary hover:bg-primary-dark transition-colors inline-flex items-center justify-center"
+              aria-label="Adicionar professor"
+            >
+              {mostrarFormProfessor ? <X size={16} /> : <Plus size={16} />}
+            </button>
+            <button onClick={mostrarFormProfessor ? fecharFormProfessor : abrirNovoProfessor} className="hidden md:inline-flex h-9 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors items-center">
+              {mostrarFormProfessor ? 'Cancelar' : 'Adicionar professor'}
+            </button>
+          </div>
         </div>
 
         {mostrarFormProfessor && (
@@ -294,7 +311,7 @@ export default function AdminTeachersView() {
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row gap-3 mb-4">
+        <div className={`${mostrarFiltrosMobile ? 'flex' : 'hidden'} flex-col md:flex md:flex-row gap-3 mb-4`}>
           <input
             value={filtroNome}
             onChange={(event) => { setFiltroNome(event.target.value); setPagina(1); }}
@@ -323,43 +340,51 @@ export default function AdminTeachersView() {
         {carregando && <div className="py-6 text-sm text-slate-500">Carregando professores...</div>}
 
         {!carregando && paginados.map((professor) => (
-          <div key={professor.id} className="py-3 border-b border-slate-100 last:border-b-0 text-slate-700 grid grid-cols-5 md:grid-cols-12 gap-3 items-center">
-            <div className="md:col-span-2 flex flex-wrap mdgap-2">
-              <button onClick={() => abrirEditarProfessor(professor)} className="h-8 px-2 rounded-lg text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors inline-flex items-center gap-1">
-                <Pencil size={12} /> Editar
-              </button>
-              <button onClick={() => handleToggleStatusProfessor(professor.id)} className={`h-8 px-2 rounded-lg text-xs font-medium transition-colors ${professor.status === 'ativo' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
-                {professor.status === 'ativo' ? 'Inativar' : 'Ativar'}
-              </button>
-            </div>
+          <div key={professor.id} className={`mb-2 rounded-lg bg-slate-100 border border-slate-200 shadow-md text-slate-700 ${professor.status === 'ativo' ? 'border-l-8 border-l-emerald-500' : 'border-l-8 border-l-red-500'}`}>
+            <div className="flex gap-3 md:items-center md:gap-3">
+              <div className="flex hidden md:flex items-center gap-2 flex-wrap col-span-2 p-2">
+                <button onClick={() => abrirEditarProfessor(professor)} className="w-16 px-2 rounded-md p-1 text-xs font-medium text-slate-700 bg-slate-200 border border-slate-300 hover:bg-slate-200 transition-colors flex flex-col items-center gap-1">
+                  <Pencil/>
+                  Editar
+                </button>
+                <button onClick={() => handleToggleStatusProfessor(professor.id)} className={`w-16 px-2 rounded-md p-1 text-xs font-medium transition-colors flex flex-col items-center gap-1 ${professor.status === 'ativo' ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-700' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-700'}`}>
+                  {professor.status === 'ativo' ? <ShieldMinus /> : <ShieldCheck />}
+                  {professor.status === 'ativo' ? 'Inativar' : 'Ativar'}
+                </button>
+              </div>
 
-            <div className="col-span-3 md:col-span-6 min-w-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                  {professor.avatarUrl ? (
-                    <img src={professor.avatarUrl} alt={professor.nome} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Sem</div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="font-medium text-slate-800 truncate">{professor.nome}</div>
-                  <div className="text-sm text-slate-500 truncate">{professor.disciplina || 'Sem disciplina'}</div>
+              <div className="md:grow min-w-0 md:col-span-6 gap-3 my-3">
+                <div className="ps-2 flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                    {professor.avatarUrl ? (
+                      <img src={professor.avatarUrl} alt={professor.nome} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Sem</div>
+                    )}
+                  </div>
+                  <div className="">
+                    <div className="font-medium text-slate-800 truncate">{professor.nome}</div>
+                    <div className="text-sm text-slate-500 truncate">{professor.disciplina || 'Sem disciplina'}</div>
+                    <div className="md:hidden text-sm text-slate-500 truncate">{professor.email}</div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="md:col-span-3 min-w-0 hidden md:block">
-              <div className="text-sm text-slate-700 truncate">{professor.email}</div>
-              <div className="text-sm text-slate-500 truncate">{professor.telefone || 'Sem telefone'}</div>
-            </div>
-
-            <div className="col-span-1 md:text-right">
-              <div className={`text-xs text-center px-2 py-1 min-h-6 rounded-full font-semibold ${professor.status === 'ativo' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                <span className='hidden md:block'>{professor.status}</span>
-                { professor.status !== 'ativo' && <div className='block flex items-center justify-center md:hidden'><Ban/></div> }
-                { professor.status === 'ativo' && <div className='block flex items-center justify-center md:hidden'><CheckCircle/></div> }
+              <div className="md:col-span-3 md:w-[300px] hidden md:flex">
+                <div className="text-sm text-slate-500 truncate">{professor.email}</div>
               </div>
+            </div>
+            <div>
+
+              <div className="grid grid-cols-2 md:hidden p-1">
+                <button onClick={() => abrirEditarProfessor(professor)} className="h-8 px-2 rounded-s-md text-xs font-medium text-primary border border-primary border-r-0 inline-flex justify-center items-center gap-1">
+                  <Pencil />
+                </button>
+                <button onClick={() => handleToggleStatusProfessor(professor.id)} className={`h-8 px-2 rounded-e-lg text-xs font-medium border border-primary border-l-0 inline-flex justify-center items-center gap-1 ${professor.status === 'ativo' ? 'text-red-600' : 'text-emerald-700'}`}>
+                  {professor.status === 'ativo' ? <ShieldMinus /> : <ShieldCheck />}
+                </button>
+              </div>
+
             </div>
           </div>
         ))}
