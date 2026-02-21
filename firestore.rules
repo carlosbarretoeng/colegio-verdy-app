@@ -10,18 +10,34 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn()
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
 
       allow create: if isOwner(userId)
                     && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.role == 'parent';
+                    && request.resource.data.role == 'parent'
+                    || isAdmin();
 
       allow update: if isOwner(userId)
                     && request.resource.data.uid == resource.data.uid
-                    && request.resource.data.role == resource.data.role;
+                    && request.resource.data.role == resource.data.role
+                    || isAdmin()
+                    && request.resource.data.uid == resource.data.uid;
 
       allow delete: if false;
+    }
+
+    match /classrooms/{classroomId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /students/{studentId} {
+      allow read, write: if isAdmin();
     }
 
     match /{document=**} {

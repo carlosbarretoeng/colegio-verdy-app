@@ -1,37 +1,17 @@
-import React, { useMemo, useState } from 'react';
-import { Pencil } from 'lucide-react';
-
-const TURMAS = [
-  { id: 't1', nome: 'Berçário II', periodo: 'Integral', status: 'ativa' },
-  { id: 't2', nome: 'Maternal I', periodo: 'Matutino', status: 'ativa' },
-  { id: 't3', nome: 'Maternal II', periodo: 'Vespertino', status: 'inativa' },
-  { id: 't4', nome: 'Jardim I', periodo: 'Matutino', status: 'ativa' },
-  { id: 't5', nome: 'Jardim II', periodo: 'Vespertino', status: 'ativa' },
-  { id: 't6', nome: 'Pré I', periodo: 'Integral', status: 'inativa' }
-];
-
-const ALUNOS = [
-  { id: 'a1', nome: 'Ana Clara Souza', turmaId: 't1', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Ana+Clara+Souza&background=e2e8f0&color=0f172a' },
-  { id: 'a2', nome: 'Pedro Henrique Lima', turmaId: 't2', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Pedro+Henrique+Lima&background=dbeafe&color=1e3a8a' },
-  { id: 'a3', nome: 'Lívia Fernandes', turmaId: 't2', status: 'inativo', fotoUrl: 'https://ui-avatars.com/api/?name=Livia+Fernandes&background=fce7f3&color=9d174d' },
-  { id: 'a4', nome: 'Lucas Martins', turmaId: 't4', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Lucas+Martins&background=dcfce7&color=166534' },
-  { id: 'a5', nome: 'Sofia Almeida', turmaId: 't5', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Sofia+Almeida&background=fef3c7&color=92400e' },
-  { id: 'a6', nome: 'Miguel Costa', turmaId: 't3', status: 'inativo', fotoUrl: 'https://ui-avatars.com/api/?name=Miguel+Costa&background=e0e7ff&color=3730a3' },
-  { id: 'a7', nome: 'Helena Rocha', turmaId: 't1', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Helena+Rocha&background=fee2e2&color=991b1b' },
-  { id: 'a8', nome: 'Arthur Nunes', turmaId: 't5', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Arthur+Nunes&background=cffafe&color=155e75' },
-  { id: 'a9', nome: 'Isabella Campos', turmaId: 't4', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Isabella+Campos&background=ede9fe&color=5b21b6' },
-  { id: 'a10', nome: 'Theo Ribeiro', turmaId: 't6', status: 'inativo', fotoUrl: 'https://ui-avatars.com/api/?name=Theo+Ribeiro&background=ffedd5&color=9a3412' },
-  { id: 'a11', nome: 'Valentina Dias', turmaId: 't1', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Valentina+Dias&background=fce7f3&color=9d174d' },
-  { id: 'a12', nome: 'Gael Oliveira', turmaId: 't2', status: 'ativo', fotoUrl: 'https://ui-avatars.com/api/?name=Gael+Oliveira&background=dbeafe&color=1d4ed8' }
-];
+import React, { useEffect, useMemo, useState } from 'react';
+import { Ban, CheckCircle, Pencil } from 'lucide-react';
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  updateDoc
+} from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 const ITEMS_PER_PAGE = 5;
-
-const EMPTY_FORM = {
-  nome: '',
-  turmaId: '',
-  fotoUrl: ''
-};
+const EMPTY_FORM = { nome: '', turmaId: '', fotoUrl: '' };
 
 function createAvatarUrl(nome) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(nome)}&background=e2e8f0&color=0f172a`;
@@ -46,50 +26,97 @@ async function loadFileAsDataUrl(file) {
   });
 }
 
-async function renderEditedImage(src, zoom, rotationDeg) {
+async function optimizeImageDataUrl(dataUrl) {
   const image = await new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('Falha ao processar imagem.'));
-    img.src = src;
+    img.src = dataUrl;
   });
 
+  const maxSize = 512;
   const canvas = document.createElement('canvas');
-  const size = 512;
-  canvas.width = size;
-  canvas.height = size;
   const context = canvas.getContext('2d');
-  if (!context) return src;
+  if (!context) return dataUrl;
 
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, size, size);
-  context.translate(size / 2, size / 2);
-  context.rotate((rotationDeg * Math.PI) / 180);
+  const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
 
-  const ratio = Math.max(size / image.width, size / image.height);
-  const finalScale = ratio * zoom;
-  const width = image.width * finalScale;
-  const height = image.height * finalScale;
-  context.drawImage(image, -width / 2, -height / 2, width, height);
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(image, 0, 0, width, height);
 
-  return canvas.toDataURL('image/jpeg', 0.9);
+  return canvas.toDataURL('image/jpeg', 0.85);
 }
 
 export default function AdminStudentsView() {
-  const [turmas] = useState(TURMAS);
-  const [alunos, setAlunos] = useState(ALUNOS);
+  const [alunos, setAlunos] = useState([]);
+  const [turmas, setTurmas] = useState([]);
 
   const [mostrarFormAluno, setMostrarFormAluno] = useState(false);
   const [alunoEmEdicaoId, setAlunoEmEdicaoId] = useState(null);
   const [formAluno, setFormAluno] = useState(EMPTY_FORM);
-  const [fotoFonte, setFotoFonte] = useState('');
-  const [fotoZoom, setFotoZoom] = useState(1);
-  const [fotoRotacao, setFotoRotacao] = useState(0);
 
   const [filtroAlunoNome, setFiltroAlunoNome] = useState('');
   const [filtroAlunoStatus, setFiltroAlunoStatus] = useState('todos');
   const [filtroAlunoTurma, setFiltroAlunoTurma] = useState('todas');
   const [paginaAluno, setPaginaAluno] = useState(1);
+
+  const [salvandoAluno, setSalvandoAluno] = useState(false);
+  const [carregandoAlunos, setCarregandoAlunos] = useState(true);
+  const [feedback, setFeedback] = useState({ tipo: '', mensagem: '' });
+
+  useEffect(() => {
+    if (!db) {
+      setCarregandoAlunos(false);
+      setFeedback({ tipo: 'erro', mensagem: 'Banco de dados não configurado.' });
+      return () => { };
+    }
+
+    const unsubscribe = onSnapshot(collection(db, 'students'), (snapshot) => {
+      const lista = snapshot.docs.map((item) => {
+        const data = item.data();
+        return {
+          id: item.id,
+          nome: data.nome || 'Sem nome',
+          turmaId: data.turmaId || '',
+          status: data.status || 'ativo',
+          fotoUrl: data.fotoUrl || ''
+        };
+      }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+      setAlunos(lista);
+      setCarregandoAlunos(false);
+    }, (error) => {
+      setCarregandoAlunos(false);
+      setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível carregar os alunos do banco.' });
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!db) {
+      return () => { };
+    }
+
+    const unsubscribe = onSnapshot(collection(db, 'classrooms'), (snapshot) => {
+      const lista = snapshot.docs.map((item) => {
+        const data = item.data();
+        return {
+          id: item.id,
+          nome: data.nome || 'Sem nome',
+          periodo: data.periodo || '',
+          status: data.status || 'ativa'
+        };
+      }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+      setTurmas(lista);
+    });
+
+    return unsubscribe;
+  }, []);
 
   const alunosFiltrados = useMemo(() => {
     return alunos.filter((aluno) => {
@@ -109,18 +136,16 @@ export default function AdminStudentsView() {
   const abrirNovoAluno = () => {
     setAlunoEmEdicaoId(null);
     setFormAluno(EMPTY_FORM);
-    setFotoFonte('');
-    setFotoZoom(1);
-    setFotoRotacao(0);
     setMostrarFormAluno(true);
   };
 
   const abrirEditarAluno = (aluno) => {
     setAlunoEmEdicaoId(aluno.id);
-    setFormAluno({ nome: aluno.nome, turmaId: aluno.turmaId, fotoUrl: aluno.fotoUrl || '' });
-    setFotoFonte(aluno.fotoUrl || '');
-    setFotoZoom(1);
-    setFotoRotacao(0);
+    setFormAluno({
+      nome: aluno.nome,
+      turmaId: aluno.turmaId || '',
+      fotoUrl: aluno.fotoUrl || ''
+    });
     setMostrarFormAluno(true);
   };
 
@@ -128,56 +153,92 @@ export default function AdminStudentsView() {
     setMostrarFormAluno(false);
     setAlunoEmEdicaoId(null);
     setFormAluno(EMPTY_FORM);
-    setFotoFonte('');
-    setFotoZoom(1);
-    setFotoRotacao(0);
   };
 
   const handleSelecionarFoto = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const dataUrl = await loadFileAsDataUrl(file);
-    setFotoFonte(dataUrl);
-    setFotoZoom(1);
-    setFotoRotacao(0);
-    event.target.value = '';
+    try {
+      const dataUrl = await loadFileAsDataUrl(file);
+      const optimized = await optimizeImageDataUrl(dataUrl);
+      setFormAluno((prev) => ({ ...prev, fotoUrl: optimized }));
+    } catch (error) {
+      setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível carregar a foto.' });
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const handleSalvarAluno = async (event) => {
     event.preventDefault();
 
+    setFeedback({ tipo: '', mensagem: '' });
+    setSalvandoAluno(true);
+
     const nome = formAluno.nome.trim();
     const turmaId = formAluno.turmaId;
-    if (!nome || !turmaId) return;
-
-    let fotoFinal = formAluno.fotoUrl;
-    if (fotoFonte) fotoFinal = await renderEditedImage(fotoFonte, fotoZoom, fotoRotacao);
-    if (!fotoFinal) fotoFinal = createAvatarUrl(nome);
-
-    if (alunoEmEdicaoId) {
-      setAlunos((prev) => prev.map((aluno) => (
-        aluno.id === alunoEmEdicaoId ? { ...aluno, nome, turmaId, fotoUrl: fotoFinal } : aluno
-      )));
-    } else {
-      setAlunos((prev) => ([{ id: `a${Date.now()}`, nome, turmaId, status: 'ativo', fotoUrl: fotoFinal }, ...prev]));
+    if (!nome || !turmaId) {
+      setSalvandoAluno(false);
+      return;
     }
 
-    setPaginaAluno(1);
-    fecharFormAluno();
+    const fotoUrl = formAluno.fotoUrl.trim() || createAvatarUrl(nome);
+
+    try {
+      if (!db) throw new Error('Banco de dados não configurado.');
+
+      if (!alunoEmEdicaoId) {
+        await addDoc(collection(db, 'students'), {
+          nome,
+          turmaId,
+          fotoUrl,
+          status: 'ativo',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        setFeedback({ tipo: 'sucesso', mensagem: 'Aluno cadastrado com sucesso.' });
+      } else {
+        await updateDoc(doc(db, 'students', alunoEmEdicaoId), {
+          nome,
+          turmaId,
+          fotoUrl,
+          updatedAt: serverTimestamp()
+        });
+        setFeedback({ tipo: 'sucesso', mensagem: 'Dados do aluno atualizados com sucesso.' });
+      }
+
+      setPaginaAluno(1);
+      fecharFormAluno();
+    } catch (error) {
+      setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível salvar o aluno.' });
+    } finally {
+      setSalvandoAluno(false);
+    }
   };
 
   const handleToggleStatusAluno = (alunoId) => {
-    setAlunos((prev) => prev.map((aluno) => (
-      aluno.id === alunoId ? { ...aluno, status: aluno.status === 'ativo' ? 'inativo' : 'ativo' } : aluno
-    )));
+    const atualizar = async () => {
+      if (!db) throw new Error('Banco de dados não configurado.');
+      const alunoAtual = alunos.find((item) => item.id === alunoId);
+      if (!alunoAtual) return;
+
+      await updateDoc(doc(db, 'students', alunoId), {
+        status: alunoAtual.status === 'ativo' ? 'inativo' : 'ativo',
+        updatedAt: serverTimestamp()
+      });
+    };
+
+    atualizar().catch((error) => {
+      setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível atualizar o status do aluno.' });
+    });
   };
 
   return (
     <div className="flex flex-col gap-4 max-w-5xl mx-auto">
       <div>
         <h2 className="text-2xl font-bold text-slate-800">Gestão de Alunos</h2>
-        <p className="text-sm text-slate-500 mt-1">Cadastro, edição e status de alunos com foto.</p>
+        <p className="text-sm text-slate-500 mt-1">Cadastro, edição e status dos alunos.</p>
       </div>
 
       <div className="glass-panel p-5 border border-slate-200/60">
@@ -190,45 +251,52 @@ export default function AdminStudentsView() {
 
         {mostrarFormAluno && (
           <form onSubmit={handleSalvarAluno} className="mb-5 rounded-xl border border-slate-200 p-4 bg-white/80 flex flex-col gap-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <input value={formAluno.nome} onChange={(event) => setFormAluno((prev) => ({ ...prev, nome: event.target.value }))} placeholder="Nome do aluno" className="form-control !py-2.5" required />
-              <select value={formAluno.turmaId} onChange={(event) => setFormAluno((prev) => ({ ...prev, turmaId: event.target.value }))} className="form-control !py-2.5" required>
-                <option value="">Selecione a turma</option>
-                {turmas.map((turma) => <option key={turma.id} value={turma.id}>{turma.nome}</option>)}
-              </select>
-              <input value={formAluno.fotoUrl} onChange={(event) => setFormAluno((prev) => ({ ...prev, fotoUrl: event.target.value }))} placeholder="URL da foto (opcional)" className="form-control !py-2.5" />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-slate-600">Upload da foto</label>
-                <input type="file" accept="image/*" onChange={handleSelecionarFoto} className="form-control !py-2" />
-                <label className="text-sm font-medium text-slate-600">Tirar foto (celular)</label>
-                <input type="file" accept="image/*" capture="environment" onChange={handleSelecionarFoto} className="form-control !py-2" />
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <div className="text-sm font-medium text-slate-600">Prévia da foto</div>
-                <div className="w-28 h-28 rounded-full overflow-hidden border border-slate-200 mx-auto bg-slate-100 relative">
-                  {(fotoFonte || formAluno.fotoUrl) && (
-                    <img src={fotoFonte || formAluno.fotoUrl} alt="Prévia" className="absolute inset-0 w-full h-full object-cover" style={{ transform: `scale(${fotoZoom}) rotate(${fotoRotacao}deg)` }} />
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs text-slate-500">Zoom
-                    <input type="range" min="1" max="2.5" step="0.1" value={fotoZoom} onChange={(event) => setFotoZoom(Number(event.target.value))} className="w-full" />
-                  </label>
-                  <label className="text-xs text-slate-500">Rotação
-                    <input type="range" min="-180" max="180" step="5" value={fotoRotacao} onChange={(event) => setFotoRotacao(Number(event.target.value))} className="w-full" />
+            <div className='grid grid-cols-1 md:grid-cols-8 gap-3 items-center'>
+              <div className='col-span-3'>
+                <div className="grid grid-cols-1 gap-3 items-center">
+                  <label className="flex flex-col gap-1 text-sm text-slate-600">
+                    Upload da foto
+                    <div className='bg-gray-50 p-4 rounded-lg border border-gray-200 '>
+                      <div className="mx-auto w-32 h-32 rounded-full overflow-hidden border border-slate-200 bg-slate-100">
+                        {formAluno.fotoUrl ? (
+                          <img src={formAluno.fotoUrl} alt="Avatar do aluno" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">Sem foto</div>
+                        )}
+                      </div>
+                    </div>
+                    <input type="file" accept="image/*" onChange={handleSelecionarFoto} className="form-control !py-2" />
                   </label>
                 </div>
               </div>
+
+              <div className='col-span-5'>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="flex flex-col md:col-span-2 gap-1 text-sm text-slate-600">
+                    Nome completo
+                    <input value={formAluno.nome} onChange={(event) => setFormAluno((prev) => ({ ...prev, nome: event.target.value }))} placeholder="Nome do aluno" className="form-control !py-2.5" required />
+                  </label>
+                  <label className="flex flex-col md:col-span-2 gap-1 text-sm text-slate-600">
+                    Turma
+                    <select value={formAluno.turmaId} onChange={(event) => setFormAluno((prev) => ({ ...prev, turmaId: event.target.value }))} className="form-control !py-2.5" required>
+                      <option value="">Selecione a turma</option>
+                      {turmas.map((turma) => <option key={turma.id} value={turma.id}>{turma.nome}</option>)}
+                    </select>
+                  </label>
+                </div>
+              </div>
             </div>
 
-            <button type="submit" className="h-10 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors self-end">
+            <button type="submit" disabled={salvandoAluno} className="h-10 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors self-end disabled:opacity-60">
               {alunoEmEdicaoId ? 'Salvar edição' : 'Salvar aluno'}
             </button>
           </form>
+        )}
+
+        {feedback.mensagem && (
+          <div className={`mb-4 rounded-lg border px-3 py-2 text-sm ${feedback.tipo === 'erro' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+            {feedback.mensagem}
+          </div>
         )}
 
         <div className="flex flex-col gap-3 mb-4 md:flex-row">
@@ -244,9 +312,11 @@ export default function AdminStudentsView() {
           </select>
         </div>
 
-        {alunosPaginados.map((aluno) => (
-          <div key={aluno.id} className="py-2 border-b border-slate-100 last:border-b-0 text-slate-700 grid grid-cols-12 gap-3">
-            <div className="col-span-2 gap-2">
+        {carregandoAlunos && <div className="py-6 text-sm text-slate-500">Carregando alunos...</div>}
+
+        {!carregandoAlunos && alunosPaginados.map((aluno) => (
+          <div key={aluno.id} className="py-3 border-b border-slate-100 last:border-b-0 text-slate-700 grid grid-cols-5 md:grid-cols-12 gap-3 items-center">
+            <div className="md:col-span-2 flex flex-wrap mdgap-2">
               <button onClick={() => abrirEditarAluno(aluno)} className="h-8 px-2 rounded-lg text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors inline-flex items-center gap-1">
                 <Pencil size={12} /> Editar
               </button>
@@ -255,18 +325,35 @@ export default function AdminStudentsView() {
               </button>
             </div>
 
-            <div className="col-span-8 flex items-center gap-3">
-              <img src={aluno.fotoUrl || createAvatarUrl(aluno.nome)} alt={aluno.nome} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
-              <div className="min-w-0 text-left">
-                <div className="font-medium truncate">{aluno.nome}</div>
+            <div className="col-span-3 md:col-span-9 min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                  {aluno.fotoUrl ? (
+                    <img src={aluno.fotoUrl} alt={aluno.nome} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Sem</div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{aluno.nome}</div>
+                  <div className="text-sm text-slate-500 truncate">{turmaNome(aluno.turmaId)}</div>
+                </div>
               </div>
             </div>
 
-            <div className="col-span-2">
-              <div className="text-sm text-slate-500">{turmaNome(aluno.turmaId)}</div>
+            <div className="col-span-1 md:text-right">
+              <div className={`text-xs text-center px-2 py-1 min-h-6 rounded-full font-semibold ${aluno.status === 'ativo' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                <span className='hidden md:block'>{aluno.status}</span>
+                { aluno.status !== 'ativo' && <div className='block flex items-center justify-center md:hidden'><Ban/></div> }
+                { aluno.status === 'ativo' && <div className='block flex items-center justify-center md:hidden'><CheckCircle/></div> }
+              </div>
             </div>
           </div>
         ))}
+
+        {!carregandoAlunos && alunosPaginados.length === 0 && (
+          <div className="py-6 text-sm text-slate-500">Nenhum aluno encontrado.</div>
+        )}
 
         <div className="mt-4 flex items-center justify-between">
           <span className="text-sm text-slate-500">Página {paginaAlunoSegura} de {totalPaginasAluno}</span>

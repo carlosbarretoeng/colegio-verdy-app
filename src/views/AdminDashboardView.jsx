@@ -5,7 +5,7 @@ const INDICADORES = [
   { id: 'i1', label: 'Total de Alunos', valor: '128', icon: Users, color: 'text-primary bg-primary/10' },
   { id: 'i2', label: 'Turmas Ativas', valor: '8', icon: School, color: 'text-primary bg-primary/10' },
   { id: 'i3', label: 'Eventos', valor: '8', icon: CalendarDays, color: 'text-primary bg-primary/10' },
-  { id: 'i3', label: 'Comunicados', valor: '8', icon: MessageSquareDashed, color: 'text-primary bg-primary/10' },
+  { id: 'i4', label: 'Comunicados', valor: '8', icon: MessageSquareDashed, color: 'text-primary bg-primary/10' },
 ];
 
 const EVENTOS = [

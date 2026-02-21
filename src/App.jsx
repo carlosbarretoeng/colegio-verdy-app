@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Calendar, MessageSquare, BookOpen, Settings, LogOut, Bell, User, School, Users } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Calendar, MessageSquare, BookOpen, LogOut, Bell, User, School, Users, ChevronDown } from 'lucide-react';
 
 import DashboardTurmasView from './views/DashboardTurmasView';
 import DiarioClasseView from './views/DiarioClasseView';
@@ -13,6 +13,7 @@ import AdminStudentsView from './views/AdminStudentsView';
 import AdminTeachersView from './views/AdminTeachersView';
 import AdminGuardiansView from './views/AdminGuardiansView';
 import AdminClassroomsView from './views/AdminClassroomsView';
+import UserProfileView from './views/UserProfileView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Mocks integrados
@@ -27,7 +28,7 @@ const INITIAL_STUDENTS_STATUS = {
 };
 
 function MainApp() {
-    const { currentUser, userRole, logout } = useAuth();
+    const { currentUser, userRole, userProfile, logout } = useAuth();
 
     const [activeTab, setActiveTab] = useState('caderneta'); // 'caderneta', 'calendario', 'comunicacao'
 
@@ -36,12 +37,25 @@ function MainApp() {
     const [selectedTurma, setSelectedTurma] = useState(null);
     const [selectedStudentId, setSelectedStudentId] = useState(null);
     const [studentsStatus, setStudentsStatus] = useState(INITIAL_STUDENTS_STATUS);
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const userMenuRef = useRef(null);
 
     useEffect(() => {
-        if (userRole === 'admin' && !activeTab.startsWith('admin-')) {
+        if (userRole === 'admin' && !activeTab.startsWith('admin-') && activeTab !== 'perfil') {
             setActiveTab('admin-dashboard');
         }
     }, [userRole, activeTab]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+                setIsUserMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     if (!currentUser) {
         return <LoginView />;
@@ -94,6 +108,8 @@ function MainApp() {
 
     // --- Roteamento Principal ---
     const renderContent = () => {
+        if (activeTab === 'perfil') return <UserProfileView />;
+
         // Roteamento baseado no Role (Perfil)
         if (userRole === 'admin') {
             if (activeTab === 'admin-dashboard') return <AdminDashboardView />;
@@ -121,7 +137,13 @@ function MainApp() {
 
     const handleTabChange = (tabId) => {
         setActiveTab(tabId);
+        setIsUserMenuOpen(false);
         if (tabId === 'caderneta') setCadernetaStep('dashboard');
+    };
+
+    const handleOpenProfile = () => {
+        setActiveTab('perfil');
+        setIsUserMenuOpen(false);
     };
 
     // O Label do menu muda dependendo da role
@@ -135,9 +157,9 @@ function MainApp() {
         ? [
             { id: 'admin-dashboard', label: 'Dashboard', icon: Calendar },
             { id: 'admin-professores', label: 'Professores', icon: User },
+            { id: 'admin-turmas', label: 'Turmas', icon: School },
             { id: 'admin-responsaveis', label: 'Responsáveis', icon: Users },
             { id: 'admin-alunos', label: 'Alunos', icon: BookOpen },
-            { id: 'admin-turmas', label: 'Turmas', icon: School },
         ]
         : [
             { id: 'caderneta', label: getNavLabel(), icon: BookOpen },
@@ -145,25 +167,9 @@ function MainApp() {
             { id: 'comunicacao', label: 'Mensagens', icon: MessageSquare },
         ];
 
-    const getHeaderTitle = () => {
-        if (userRole === 'admin') {
-            if (activeTab === 'admin-dashboard') return '';
-            if (activeTab === 'admin-professores') return 'Gestão de Professores';
-            if (activeTab === 'admin-responsaveis') return 'Gestão de Responsáveis';
-            if (activeTab === 'admin-alunos') return 'Gestão de Alunos';
-            if (activeTab === 'admin-turmas') return 'Gestão de Turmas';
-            return 'Área da Direção';
-        }
-
-        if (activeTab === 'calendario') return 'Eventos e Datas';
-        if (activeTab === 'comunicacao') return 'Central de Comunicação';
-        if (userRole === 'parent') return 'Área da Família';
-        // Teacher
-        if (cadernetaStep === 'dashboard') return 'Área do Professor';
-        if (cadernetaStep === 'diario') return `Turma: ${selectedTurma?.nome}`;
-        if (cadernetaStep === 'aluno') return 'Preenchimento Diário';
-        return '';
-    };
+    const userDisplayName = userProfile?.nome || currentUser?.displayName || 'Usuário';
+    const userDisplayEmail = userProfile?.email || currentUser?.email || '';
+    const userAvatar = userProfile?.avatarUrl || '';
 
     return (
         <div className="flex h-screen overflow-hidden bg-bg-app">
@@ -209,14 +215,43 @@ function MainApp() {
                 <header className="hidden lg:flex h-20 items-center justify-between px-8 bg-white border-b border-slate-200 shrink-0">
                     <div className="flex ml-auto items-center gap-6">
                         <button className="p-2 text-slate-500 hover:text-primary hover:bg-slate-50 rounded-full transition-colors"><Bell size={20} /></button>
-                        <div className="flex items-center gap-3 cursor-pointer select-none" onClick={logout}>
-                            <div className="w-11 h-11 rounded-full bg-slate-100 border-2 border-white shadow-sm flex items-center justify-center text-slate-500">
-                                <User size={20} />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="font-semibold text-sm text-slate-800 uppercase">{userRole}</span>
-                                <span className="text-xs text-slate-500">Clique para Sair</span>
-                            </div>
+                        <div ref={userMenuRef} className="relative">
+                            <button
+                                onClick={() => setIsUserMenuOpen((prev) => !prev)}
+                                className="flex items-center gap-3 select-none hover:bg-slate-50 rounded-xl px-2 py-1.5 transition-colors"
+                            >
+                                <div className="w-11 h-11 rounded-full bg-slate-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center text-slate-500">
+                                    {userAvatar ? (
+                                        <img src={userAvatar} alt={userDisplayName} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <User size={20} />
+                                    )}
+                                </div>
+                                <div className="flex flex-col text-left">
+                                    <span className="font-semibold text-sm text-slate-800 uppercase">{userDisplayName}</span>
+                                    <span className="text-xs text-slate-500 truncate max-w-[180px]">{userDisplayEmail || 'Conta ativa'}</span>
+                                </div>
+                                <ChevronDown size={16} className={`text-slate-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isUserMenuOpen && (
+                                <div className="absolute right-0 top-[calc(100%+8px)] w-56 rounded-xl border border-slate-200 bg-white shadow-lg p-2 z-20">
+                                    <button
+                                        onClick={handleOpenProfile}
+                                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-700 hover:bg-slate-50"
+                                    >
+                                        <User size={16} />
+                                        Meu perfil
+                                    </button>
+                                    <button
+                                        onClick={logout}
+                                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50"
+                                    >
+                                        <LogOut size={16} />
+                                        Sair do sistema
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </header>
