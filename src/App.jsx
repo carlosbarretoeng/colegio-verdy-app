@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Calendar, MessageSquare, BookOpen, LogOut, Bell, User, School, Users, ChevronDown } from 'lucide-react';
+import { Calendar, MessageSquare, BookOpen, LogOut, Bell, User, School, Users, ChevronDown, Menu, X } from 'lucide-react';
+import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 
-import DashboardTurmasView from './views/DashboardTurmasView';
+import TeacherDashboard from './views/TeacherDashboard';
 import DiarioClasseView from './views/DiarioClasseView';
 import CadernetaView from './views/CadernetaView';
 import CalendarioView from './views/CalendarioView';
@@ -9,12 +10,14 @@ import ComunicacaoView from './views/ComunicacaoView';
 import LoginView from './views/LoginView';
 import ParentDashboardView from './views/ParentDashboardView';
 import AdminDashboardView from './views/AdminDashboardView';
+import AdminCalendarView from './views/AdminCalendarView';
 import AdminStudentsView from './views/AdminStudentsView';
 import AdminTeachersView from './views/AdminTeachersView';
 import AdminGuardiansView from './views/AdminGuardiansView';
 import AdminClassroomsView from './views/AdminClassroomsView';
 import UserProfileView from './views/UserProfileView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { db } from './config/firebase';
 
 // Mocks integrados
 // Status possíveis: 'pending', 'draft', 'sent', 'absent'
@@ -27,6 +30,8 @@ const INITIAL_STUDENTS_STATUS = {
     '6': { id: '6', turmaId: 't1', name: 'Alice R.', status: 'pending', avatar: 'https://ui-avatars.com/api/?name=Alice+R&background=fce7f3&color=9d174d' },
 };
 
+const EMPTY_TEACHER_CLASSROOMS = [];
+
 function MainApp() {
     const { currentUser, userRole, userProfile, logout } = useAuth();
 
@@ -37,14 +42,87 @@ function MainApp() {
     const [selectedTurma, setSelectedTurma] = useState(null);
     const [selectedStudentId, setSelectedStudentId] = useState(null);
     const [studentsStatus, setStudentsStatus] = useState(INITIAL_STUDENTS_STATUS);
+    const [teacherClassrooms, setTeacherClassrooms] = useState(EMPTY_TEACHER_CLASSROOMS);
+    const [loadingTeacherData, setLoadingTeacherData] = useState(true);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState(() => (navigator.onLine ? 'online' : 'offline'));
     const userMenuRef = useRef(null);
+    const syncTimeoutRef = useRef(null);
 
     useEffect(() => {
         if (userRole === 'admin' && !activeTab.startsWith('admin-') && activeTab !== 'perfil') {
             setActiveTab('admin-dashboard');
         }
     }, [userRole, activeTab]);
+
+    useEffect(() => {
+        if (!db || userRole !== 'teacher' || !currentUser?.uid) {
+            if (userRole !== 'teacher') {
+                setTeacherClassrooms(EMPTY_TEACHER_CLASSROOMS);
+                setStudentsStatus(INITIAL_STUDENTS_STATUS);
+            }
+            setLoadingTeacherData(false);
+            return () => { };
+        }
+
+        setLoadingTeacherData(true);
+
+        const classroomsQuery = query(collection(db, 'classrooms'), where('professorId', '==', currentUser.uid));
+        const unsubscribeClassrooms = onSnapshot(classroomsQuery, (snapshot) => {
+            const lista = snapshot.docs.map((item) => {
+                const data = item.data();
+                return {
+                    id: item.id,
+                    nome: data.nome || 'Sem nome',
+                    periodo: data.periodo || '',
+                };
+            }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+            setTeacherClassrooms(lista);
+        }, () => {
+            setTeacherClassrooms(EMPTY_TEACHER_CLASSROOMS);
+        });
+
+        const unsubscribeStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
+            const mapa = {};
+
+            snapshot.docs.forEach((item) => {
+                const data = item.data();
+                mapa[item.id] = {
+                    id: item.id,
+                    turmaId: data.turmaId || '',
+                    name: data.nome || 'Sem nome',
+                    status: data.cadernetaStatus || 'pending',
+                    avatar: data.fotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome || 'Aluno')}&background=e2e8f0&color=0f172a`
+                };
+            });
+
+            setStudentsStatus(mapa);
+            setLoadingTeacherData(false);
+        }, () => {
+            setStudentsStatus({});
+            setLoadingTeacherData(false);
+        });
+
+        return () => {
+            unsubscribeClassrooms();
+            unsubscribeStudents();
+        };
+    }, [userRole, currentUser?.uid]);
+
+    useEffect(() => {
+        if (userRole !== 'teacher') return;
+
+        const allowedTurmaIds = new Set(teacherClassrooms.map((turma) => turma.id));
+        setStudentsStatus((prev) => {
+            const filtered = Object.values(prev).filter((student) => allowedTurmaIds.has(student.turmaId));
+            return filtered.reduce((acc, student) => {
+                acc[student.id] = student;
+                return acc;
+            }, {});
+        });
+    }, [teacherClassrooms, userRole]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -55,6 +133,30 @@ function MainApp() {
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        const handleOnline = () => {
+            setConnectionStatus('syncing');
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+            syncTimeoutRef.current = setTimeout(() => {
+                setConnectionStatus('online');
+            }, 1500);
+        };
+
+        const handleOffline = () => {
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+            setConnectionStatus('offline');
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        };
     }, []);
 
     if (!currentUser) {
@@ -77,11 +179,21 @@ function MainApp() {
             ...prev,
             [studentId]: { ...prev[studentId], status: newStatus }
         }));
+
+        if (!db || !studentId) return;
+        updateDoc(doc(db, 'students', studentId), { cadernetaStatus: newStatus }).catch(() => { });
     };
 
     const renderCadernetaFlow = () => {
         if (cadernetaStep === 'dashboard') {
-            return <DashboardTurmasView onOpenTurma={handleOpenTurma} />;
+            return (
+                <TeacherDashboard
+                    onOpenTurma={handleOpenTurma}
+                    turmas={teacherClassrooms}
+                    studentsStatus={studentsStatus}
+                    carregando={loadingTeacherData}
+                />
+            );
         }
         if (cadernetaStep === 'diario' && selectedTurma) {
             return (
@@ -103,7 +215,14 @@ function MainApp() {
                 />
             );
         }
-        return <DashboardTurmasView onOpenTurma={handleOpenTurma} />; // Fallback
+        return (
+            <TeacherDashboard
+                onOpenTurma={handleOpenTurma}
+                turmas={teacherClassrooms}
+                studentsStatus={studentsStatus}
+                carregando={loadingTeacherData}
+            />
+        ); // Fallback
     };
 
     // --- Roteamento Principal ---
@@ -113,6 +232,7 @@ function MainApp() {
         // Roteamento baseado no Role (Perfil)
         if (userRole === 'admin') {
             if (activeTab === 'admin-dashboard') return <AdminDashboardView />;
+            if (activeTab === 'admin-calendar') return <AdminCalendarView />;
             if (activeTab === 'admin-professores') return <AdminTeachersView />;
             if (activeTab === 'admin-responsaveis') return <AdminGuardiansView />;
             if (activeTab === 'admin-alunos') return <AdminStudentsView />;
@@ -138,24 +258,27 @@ function MainApp() {
     const handleTabChange = (tabId) => {
         setActiveTab(tabId);
         setIsUserMenuOpen(false);
+        setIsMobileDrawerOpen(false);
         if (tabId === 'caderneta') setCadernetaStep('dashboard');
     };
 
     const handleOpenProfile = () => {
         setActiveTab('perfil');
         setIsUserMenuOpen(false);
+        setIsMobileDrawerOpen(false);
     };
 
     // O Label do menu muda dependendo da role
     const getNavLabel = () => {
         if (userRole === 'admin') return 'Visão Geral';
         if (userRole === 'parent') return 'Meu Filho';
-        return 'Diário de Classe';
+        return 'Dashboard';
     };
 
     const navItems = userRole === 'admin'
         ? [
             { id: 'admin-dashboard', label: 'Dashboard', icon: Calendar },
+            { id: 'admin-calendar', label: 'Calendário', icon: Calendar },
             { id: 'admin-professores', label: 'Professores', icon: User },
             { id: 'admin-turmas', label: 'Turmas', icon: School },
             { id: 'admin-responsaveis', label: 'Responsáveis', icon: Users },
@@ -171,16 +294,33 @@ function MainApp() {
     const userDisplayEmail = userProfile?.email || currentUser?.email || '';
     const userAvatar = userProfile?.avatarUrl || '';
 
+    const connectionConfig = connectionStatus === 'offline'
+        ? { label: 'Offline', className: 'bg-red-50 text-red-600 border-red-200', dotClassName: 'bg-red-500' }
+        : connectionStatus === 'syncing'
+            ? { label: 'Sincronizando...', className: 'bg-amber-50 text-amber-700 border-amber-200', dotClassName: 'bg-amber-500' }
+            : { label: 'Online', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', dotClassName: 'bg-emerald-500' };
+
     return (
         <div className="flex h-screen overflow-hidden bg-bg-app">
             {/* Mobile Topbar */}
             <div className="lg:hidden fixed top-0 w-full h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-50">
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setIsMobileDrawerOpen((prev) => !prev)}
+                        className="w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 inline-flex items-center justify-center"
+                        aria-label={isMobileDrawerOpen ? 'Fechar menu' : 'Abrir menu'}
+                    >
+                        {isMobileDrawerOpen ? <X size={18} /> : <Menu size={18} />}
+                    </button>
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white font-bold text-sm shadow-[0_2px_8px_rgba(16,185,129,0.3)]">V</div>
                     <span className="font-bold text-slate-800 tracking-tight">Verdy</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <button className="text-slate-500 hover:text-primary"><Bell size={20} /></button>
+                    <div className={`hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-[11px] font-medium ${connectionConfig.className}`}>
+                        <span className={`w-2 h-2 rounded-full ${connectionConfig.dotClassName}`} />
+                        {connectionConfig.label}
+                    </div>
                     <div ref={userMenuRef} className="relative">
                         <button
                             onClick={() => setIsUserMenuOpen((prev) => !prev)}
@@ -219,6 +359,47 @@ function MainApp() {
                 </div>
             </div>
 
+            {isMobileDrawerOpen && (
+                <div className="lg:hidden fixed inset-0 z-40">
+                    <button
+                        onClick={() => setIsMobileDrawerOpen(false)}
+                        className="absolute inset-0 bg-slate-900/40"
+                        aria-label="Fechar menu"
+                    />
+                    <aside className="absolute left-0 top-0 h-full w-full bg-white border-r border-slate-200 p-5 flex flex-col">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white font-bold text-sm">V</div>
+                                <span className="font-bold text-slate-800 tracking-tight">Verdy</span>
+                            </div>
+                            <button
+                                onClick={() => setIsMobileDrawerOpen(false)}
+                                className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 inline-flex items-center justify-center"
+                                aria-label="Fechar menu"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <nav className="flex flex-col gap-2">
+                            {navItems.map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => handleTabChange(item.id)}
+                                    className={`flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === item.id
+                                        ? 'bg-primary text-white'
+                                        : 'text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    <item.icon size={18} />
+                                    {item.label}
+                                </button>
+                            ))}
+                        </nav>
+                    </aside>
+                </div>
+            )}
+
             {/* Desktop Sidebar */}
             <aside className="hidden lg:flex w-[280px] bg-white border-r border-slate-200 flex-col p-6 z-10 shrink-0">
                 <div className="flex items-center gap-3 mb-10 mt-2">
@@ -247,6 +428,10 @@ function MainApp() {
                 <header className="hidden lg:flex h-20 items-center justify-between px-8 bg-white border-b border-slate-200 shrink-0">
                     <div className="flex ml-auto items-center gap-6">
                         <button className="p-2 text-slate-500 hover:text-primary hover:bg-slate-50 rounded-full transition-colors"><Bell size={20} /></button>
+                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${connectionConfig.className}`}>
+                            <span className={`w-2 h-2 rounded-full ${connectionConfig.dotClassName}`} />
+                            {connectionConfig.label}
+                        </div>
                         <div ref={userMenuRef} className="relative">
                             <button
                                 onClick={() => setIsUserMenuOpen((prev) => !prev)}
@@ -288,25 +473,10 @@ function MainApp() {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto p-4 lg:p-8 pb-24 lg:pb-8">
+                <div className="flex-1 overflow-y-auto p-4 lg:p-8 pb-8">
                     {renderContent()}
                 </div>
             </main>
-
-            {/* Mobile Bottom Navigation Layout */}
-            <nav className="fixed bottom-0 w-full bg-white border-t border-slate-200 flex justify-around items-center h-16 lg:hidden pb-safe z-50">
-                {navItems.map(item => (
-                    <button
-                        key={item.id}
-                        onClick={() => handleTabChange(item.id)}
-                        className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${activeTab === item.id ? 'text-primary' : 'text-slate-400'
-                            }`}
-                    >
-                        <item.icon size={22} className={activeTab === item.id ? 'fill-primary/20' : ''} />
-                        <span className="text-[10px] font-medium">{item.label}</span>
-                    </button>
-                ))}
-            </nav>
         </div>
     );
 }

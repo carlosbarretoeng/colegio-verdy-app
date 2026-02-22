@@ -13,9 +13,6 @@ const ParentDashboardView = () => {
                     <h1 className="text-2xl font-bold text-slate-800">Painel do Responsável</h1>
                     <p className="text-sm text-slate-500 mt-1">Acompanhe a rotina dos seus filhos (Em Construção)</p>
                 </div>
-                <button onClick={logout} className="flex items-center gap-2 text-sm font-semibold text-red-500 bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors">
-                    <LogOut size={16} /> Sair
-                </button>
             </div>
 
             <div className="glass-panel p-8 text-center flex flex-col items-center justify-center h-64 border-dashed border-2 border-slate-200">

@@ -1,7 +1,14 @@
 import { initializeApp } from "firebase/app";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
-import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import {
+    connectFirestoreEmulator,
+    initializeFirestore,
+    memoryLocalCache,
+    persistentLocalCache,
+    persistentMultipleTabManager
+} from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,10 +27,27 @@ const firebaseConfigError = missingVars.length
     ? `Configuração Firebase incompleta. Defina: ${missingVars.join(', ')}.`
     : null;
 
+function createFirestoreInstance(firebaseApp) {
+    if (!firebaseApp) return null;
+
+    try {
+        return initializeFirestore(firebaseApp, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager()
+            })
+        });
+    } catch {
+        return initializeFirestore(firebaseApp, {
+            localCache: memoryLocalCache()
+        });
+    }
+}
+
 const app = firebaseConfigError ? null : initializeApp(firebaseConfig);
 const auth = app ? getAuth(app) : null;
-const db = app ? getFirestore(app) : null;
+const db = createFirestoreInstance(app);
 const functions = app ? getFunctions(app) : null;
+const storage = app ? getStorage(app) : null;
 
 const useAuthEmulator = import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_AUTH_EMULATOR === 'true';
 const authEmulatorHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST || 'http://127.0.0.1:9099';
@@ -46,4 +70,4 @@ if (functions && useFunctionsEmulator) {
     connectFunctionsEmulator(functions, functionsEmulatorHost, functionsEmulatorPort);
 }
 
-export { app, auth, db, functions, firebaseConfigError };
+export { app, auth, db, functions, storage, firebaseConfigError };

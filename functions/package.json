@@ -9,7 +9,8 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "set-role": "node scripts/setUserRole.mjs"
+    "set-role": "node scripts/setUserRole.mjs",
+    "seed:demo": "node scripts/seedDemoData.mjs"
   },
   "engines": {
     "node": "24"

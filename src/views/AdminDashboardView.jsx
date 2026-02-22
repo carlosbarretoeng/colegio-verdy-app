@@ -1,18 +1,7 @@
-import React from 'react';
-import { Users, UserCheck, School, CalendarDays, MessageSquare, MessageSquareDashed } from 'lucide-react';
-
-const INDICADORES = [
-  { id: 'i1', label: 'Total de Alunos', valor: '128', icon: Users, color: 'text-primary bg-primary/10' },
-  { id: 'i2', label: 'Turmas Ativas', valor: '8', icon: School, color: 'text-primary bg-primary/10' },
-  { id: 'i3', label: 'Eventos', valor: '8', icon: CalendarDays, color: 'text-primary bg-primary/10' },
-  { id: 'i4', label: 'Comunicados', valor: '8', icon: MessageSquareDashed, color: 'text-primary bg-primary/10' },
-];
-
-const EVENTOS = [
-  { id: 'e1', dia: '22', mes: 'FEV', titulo: 'Reunião Pedagógica', horario: '14:00' },
-  { id: 'e2', dia: '25', mes: 'FEV', titulo: 'Entrega de Relatórios', horario: '09:00' },
-  { id: 'e3', dia: '03', mes: 'MAR', titulo: 'Início Projeto Leitura', horario: '08:30' }
-];
+import React, { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, MessageSquare, MessageSquareDashed, School, Users } from 'lucide-react';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 const MENSAGENS = [
   { id: 'm1', titulo: 'Comunicado Geral', texto: 'Atualização do calendário escolar disponível para famílias.', tempo: 'há 10 min' },
@@ -21,6 +10,83 @@ const MENSAGENS = [
 ];
 
 export default function AdminDashboardView() {
+  const [totalAlunos, setTotalAlunos] = useState(null);
+  const [totalTurmasAtivas, setTotalTurmasAtivas] = useState(null);
+  const [eventos, setEventos] = useState([]);
+  const [carregandoEventos, setCarregandoEventos] = useState(true);
+
+  useEffect(() => {
+    if (!db) return () => { };
+
+    const unsubscribers = [];
+
+    unsubscribers.push(
+      onSnapshot(collection(db, 'students'), (snapshot) => {
+        setTotalAlunos(snapshot.size);
+      }, () => {
+        setTotalAlunos(0);
+      })
+    );
+
+    unsubscribers.push(
+      onSnapshot(query(collection(db, 'classrooms'), where('status', '==', 'ativa')), (snapshot) => {
+        setTotalTurmasAtivas(snapshot.size);
+      }, () => {
+        setTotalTurmasAtivas(0);
+      })
+    );
+
+    unsubscribers.push(
+      onSnapshot(collection(db, 'events'), (snapshot) => {
+        const lista = snapshot.docs.map((item) => {
+          const data = item.data();
+          return {
+            id: item.id,
+            titulo: data.titulo || 'Sem título',
+            tipo: data.tipo || 'Administrativos',
+            data: data.data || '',
+            local: data.local || '',
+            diaTodo: !!data.diaTodo,
+            horario: data.horario || '',
+            anexoUrl: data.anexoUrl || '',
+            anexoNome: data.anexoNome || ''
+          };
+        }).sort((a, b) => {
+          const dataA = `${a.data || ''} ${a.horario || ''}`;
+          const dataB = `${b.data || ''} ${b.horario || ''}`;
+          return dataA.localeCompare(dataB);
+        });
+
+        setEventos(lista);
+        setCarregandoEventos(false);
+      }, () => {
+        setEventos([]);
+        setCarregandoEventos(false);
+      })
+    );
+
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, []);
+
+  const formatarDataEvento = (dataISO) => {
+    if (!dataISO) return { dia: '--', mes: '---' };
+    const [ano, mes, dia] = dataISO.split('-');
+    if (!ano || !mes || !dia) return { dia: '--', mes: '---' };
+    const data = new Date(Number(ano), Number(mes) - 1, Number(dia));
+
+    return {
+      dia: String(data.getDate()).padStart(2, '0'),
+      mes: data.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase()
+    };
+  };
+
+  const indicadores = useMemo(() => ([
+    { id: 'i1', label: 'Total de Alunos', valor: totalAlunos, icon: Users, color: 'text-primary bg-primary/10' },
+    { id: 'i2', label: 'Turmas Ativas', valor: totalTurmasAtivas, icon: School, color: 'text-primary bg-primary/10' },
+    { id: 'i3', label: 'Calendário', valor: eventos.length, icon: CalendarDays, color: 'text-primary bg-primary/10' },
+    { id: 'i4', label: 'Comunicados', valor: MENSAGENS.length, icon: MessageSquareDashed, color: 'text-primary bg-primary/10' }
+  ]), [totalAlunos, totalTurmasAtivas, eventos.length]);
+
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto">
       <div>
@@ -29,14 +95,14 @@ export default function AdminDashboardView() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {INDICADORES.map((item) => (
+        {indicadores.map((item) => (
           <div key={item.id} className="glass-panel p-5 border border-slate-200/60 flex items-center gap-3">
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${item.color}`}>
               <item.icon size={20} />
             </div>
             <div>
               <div className="text-xs text-slate-500 uppercase tracking-wide">{item.label}</div>
-              <div className="text-2xl font-bold text-slate-800">{item.valor}</div>
+              <div className="text-2xl font-bold text-slate-800">{item.valor ?? '—'}</div>
             </div>
           </div>
         ))}
@@ -46,22 +112,38 @@ export default function AdminDashboardView() {
         <div className="glass-panel p-5 border border-slate-200/60">
           <div className="flex items-center gap-2 mb-4">
             <CalendarDays size={18} className="text-slate-500" />
-            <h3 className="text-lg font-bold text-slate-800">Calendário Administrativo</h3>
+            <h3 className="text-lg font-bold text-slate-800">Próximos eventos</h3>
           </div>
 
           <div className="flex flex-col gap-3">
-            {EVENTOS.map((evento) => (
-              <div key={evento.id} className="rounded-xl border border-slate-200 bg-white/80 p-3 flex items-center gap-3">
-                <div className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200 flex flex-col items-center justify-center">
-                  <span className="text-base font-bold text-slate-800 leading-none">{evento.dia}</span>
-                  <span className="text-[10px] font-semibold text-slate-500">{evento.mes}</span>
+            {carregandoEventos && <div className="text-sm text-slate-500">Carregando eventos...</div>}
+
+            {!carregandoEventos && eventos.slice(0, 6).map((evento) => {
+              const dataFormatada = formatarDataEvento(evento.data);
+              return (
+                <div key={evento.id} className="rounded-xl border border-slate-200 bg-white/80 p-3 flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200 flex flex-col items-center justify-center">
+                    <span className="text-base font-bold text-slate-800 leading-none">{dataFormatada.dia}</span>
+                    <span className="text-[10px] font-semibold text-slate-500">{dataFormatada.mes}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-800 truncate">{evento.titulo}</div>
+                    <div className="text-sm text-slate-500">{evento.diaTodo ? 'Dia todo' : evento.horario}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{evento.tipo}</div>
+                    {evento.local && <div className="text-xs text-slate-500 mt-0.5 truncate">{evento.local}</div>}
+                    {evento.anexoUrl && (
+                      <a href={evento.anexoUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline mt-0.5 inline-block truncate">
+                        {evento.anexoNome || 'Ver anexo'}
+                      </a>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <div className="font-semibold text-slate-800">{evento.titulo}</div>
-                  <div className="text-sm text-slate-500">{evento.horario}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
+
+            {!carregandoEventos && eventos.length === 0 && (
+              <div className="text-sm text-slate-500">Nenhum evento cadastrado.</div>
+            )}
           </div>
         </div>
 

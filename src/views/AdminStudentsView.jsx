@@ -1,17 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Filter, Pencil, Plus, ShieldCheck, ShieldMinus, Users, X } from 'lucide-react';
+import { Filter, Pencil, Plus, ShieldCheck, ShieldMinus, Trash, Users, X } from 'lucide-react';
 import {
   addDoc,
   collection,
   doc,
   onSnapshot,
+  query,
   serverTimestamp,
-  updateDoc
+  updateDoc,
+  where
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const ITEMS_PER_PAGE = 5;
 const EMPTY_FORM = { nome: '', turmaId: '', fotoUrl: '' };
+const EMPTY_RESP_VINCULO_FORM = { responsavelId: '', parentesco: '', podeBuscar: true, contatoEmergencia: false };
 
 function createAvatarUrl(nome) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(nome)}&background=e2e8f0&color=0f172a`;
@@ -53,6 +56,7 @@ async function optimizeImageDataUrl(dataUrl) {
 export default function AdminStudentsView() {
   const [alunos, setAlunos] = useState([]);
   const [turmas, setTurmas] = useState([]);
+  const [responsaveis, setResponsaveis] = useState([]);
 
   const [mostrarFormAluno, setMostrarFormAluno] = useState(false);
   const [alunoEmEdicaoId, setAlunoEmEdicaoId] = useState(null);
@@ -66,7 +70,12 @@ export default function AdminStudentsView() {
 
   const [salvandoAluno, setSalvandoAluno] = useState(false);
   const [carregandoAlunos, setCarregandoAlunos] = useState(true);
+  const [salvandoResponsavelAluno, setSalvandoResponsavelAluno] = useState(false);
   const [feedback, setFeedback] = useState({ tipo: '', mensagem: '' });
+  const [mostrarModalResponsaveis, setMostrarModalResponsaveis] = useState(false);
+  const [alunoGerenciandoResponsaveis, setAlunoGerenciandoResponsaveis] = useState(null);
+  const [filtroResponsavelNome, setFiltroResponsavelNome] = useState('');
+  const [formResponsavelAluno, setFormResponsavelAluno] = useState(EMPTY_RESP_VINCULO_FORM);
 
   useEffect(() => {
     if (!db) {
@@ -83,7 +92,8 @@ export default function AdminStudentsView() {
           nome: data.nome || 'Sem nome',
           turmaId: data.turmaId || '',
           status: data.status || 'ativo',
-          fotoUrl: data.fotoUrl || ''
+          fotoUrl: data.fotoUrl || '',
+          responsaveis: Array.isArray(data.responsaveis) ? data.responsaveis : []
         };
       }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
@@ -92,6 +102,29 @@ export default function AdminStudentsView() {
     }, (error) => {
       setCarregandoAlunos(false);
       setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível carregar os alunos do banco.' });
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!db) return () => { };
+
+    const parentsQuery = query(collection(db, 'users'), where('role', '==', 'parent'));
+    const unsubscribe = onSnapshot(parentsQuery, (snapshot) => {
+      const lista = snapshot.docs.map((item) => {
+        const data = item.data();
+        return {
+          id: item.id,
+          nome: data.nome || 'Sem nome',
+          email: data.email || '',
+          telefone: data.telefone || '',
+          avatarUrl: data.avatarUrl || '',
+          status: data.status || 'ativo'
+        };
+      }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+      setResponsaveis(lista);
     });
 
     return unsubscribe;
@@ -235,6 +268,131 @@ export default function AdminStudentsView() {
     });
   };
 
+  const abrirModalResponsaveis = (aluno) => {
+    setAlunoGerenciandoResponsaveis(aluno);
+    setMostrarModalResponsaveis(true);
+    setFiltroResponsavelNome('');
+    setFormResponsavelAluno(EMPTY_RESP_VINCULO_FORM);
+  };
+
+  const fecharModalResponsaveis = () => {
+    setMostrarModalResponsaveis(false);
+    setAlunoGerenciandoResponsaveis(null);
+    setFiltroResponsavelNome('');
+    setFormResponsavelAluno(EMPTY_RESP_VINCULO_FORM);
+  };
+
+  const alunoResponsaveisAtualizado = alunoGerenciandoResponsaveis
+    ? alunos.find((item) => item.id === alunoGerenciandoResponsaveis.id) || alunoGerenciandoResponsaveis
+    : null;
+
+  const vinculosResponsaveisAluno = alunoResponsaveisAtualizado?.responsaveis || [];
+
+  const responsaveisFiltradosModal = useMemo(() => {
+    const filtro = filtroResponsavelNome.trim().toLowerCase();
+    return responsaveis
+      .filter((resp) => resp.status === 'ativo')
+      .filter((resp) => !filtro || resp.nome.toLowerCase().includes(filtro));
+  }, [responsaveis, filtroResponsavelNome]);
+
+  const handleSalvarVinculoResponsavel = async (event) => {
+    event.preventDefault();
+
+    if (!db || !alunoResponsaveisAtualizado) return;
+
+    const responsavelSelecionado = responsaveis.find((resp) => resp.id === formResponsavelAluno.responsavelId);
+    const parentesco = formResponsavelAluno.parentesco.trim();
+
+    if (!responsavelSelecionado || !parentesco) return;
+
+    try {
+      setSalvandoResponsavelAluno(true);
+      setFeedback({ tipo: '', mensagem: '' });
+
+      const existentes = Array.isArray(alunoResponsaveisAtualizado.responsaveis)
+        ? alunoResponsaveisAtualizado.responsaveis
+        : [];
+
+      const novoVinculo = {
+        responsavelId: responsavelSelecionado.id,
+        nome: responsavelSelecionado.nome,
+        email: responsavelSelecionado.email || '',
+        telefone: responsavelSelecionado.telefone || '',
+        avatarUrl: responsavelSelecionado.avatarUrl || '',
+        parentesco,
+        podeBuscar: Boolean(formResponsavelAluno.podeBuscar),
+        contatoEmergencia: Boolean(formResponsavelAluno.contatoEmergencia)
+      };
+
+      const indiceExistente = existentes.findIndex((item) => item.responsavelId === responsavelSelecionado.id);
+      let atualizados = [];
+
+      if (indiceExistente >= 0) {
+        atualizados = existentes.map((item, idx) => (idx === indiceExistente ? novoVinculo : item));
+      } else {
+        atualizados = [...existentes, novoVinculo];
+      }
+
+      if (novoVinculo.contatoEmergencia) {
+        atualizados = atualizados.map((item) => ({
+          ...item,
+          contatoEmergencia: item.responsavelId === novoVinculo.responsavelId
+        }));
+      }
+
+      await updateDoc(doc(db, 'students', alunoResponsaveisAtualizado.id), {
+        responsaveis: atualizados,
+        updatedAt: serverTimestamp()
+      });
+
+      setFormResponsavelAluno(EMPTY_RESP_VINCULO_FORM);
+      setFeedback({ tipo: 'sucesso', mensagem: 'Vínculo de responsável salvo com sucesso.' });
+    } catch (error) {
+      setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível salvar o vínculo do responsável.' });
+    } finally {
+      setSalvandoResponsavelAluno(false);
+    }
+  };
+
+  const handleEditarVinculoResponsavel = (vinculo) => {
+    setFormResponsavelAluno({
+      responsavelId: vinculo.responsavelId || '',
+      parentesco: vinculo.parentesco || '',
+      podeBuscar: Boolean(vinculo.podeBuscar),
+      contatoEmergencia: Boolean(vinculo.contatoEmergencia)
+    });
+  };
+
+  const handleRemoverVinculoResponsavel = async (responsavelId) => {
+    if (!db || !alunoResponsaveisAtualizado) return;
+
+    try {
+      setSalvandoResponsavelAluno(true);
+      setFeedback({ tipo: '', mensagem: '' });
+
+      const existentes = Array.isArray(alunoResponsaveisAtualizado.responsaveis)
+        ? alunoResponsaveisAtualizado.responsaveis
+        : [];
+
+      const atualizados = existentes.filter((item) => item.responsavelId !== responsavelId);
+
+      await updateDoc(doc(db, 'students', alunoResponsaveisAtualizado.id), {
+        responsaveis: atualizados,
+        updatedAt: serverTimestamp()
+      });
+
+      if (formResponsavelAluno.responsavelId === responsavelId) {
+        setFormResponsavelAluno(EMPTY_RESP_VINCULO_FORM);
+      }
+
+      setFeedback({ tipo: 'sucesso', mensagem: 'Vínculo removido com sucesso.' });
+    } catch (error) {
+      setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível remover o vínculo do responsável.' });
+    } finally {
+      setSalvandoResponsavelAluno(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 max-w-5xl mx-auto">
       <div>
@@ -333,53 +491,186 @@ export default function AdminStudentsView() {
 
         {!carregandoAlunos && alunosPaginados.map((aluno) => (
           <div key={aluno.id} className={`mb-2 rounded-lg bg-slate-100 border border-slate-200 shadow-md text-slate-700 ${aluno.status === 'ativo' ? 'border-l-8 border-l-emerald-500' : 'border-l-8 border-l-red-500'}`}>
-            <div className="flex gap-3 md:items-center md:gap-3">
-              <div className="flex hidden md:flex items-center gap-2 flex-wrap col-span-2 p-2">
-                <button onClick={() => abrirEditarAluno(aluno)} className="w-16 px-2 rounded-md p-1 text-xs font-medium text-slate-700 bg-slate-200 border border-slate-300 hover:bg-slate-200 transition-colors flex flex-col items-center gap-1">
-                  <Pencil />
-                  Editar
-                </button>
-                <button onClick={() => console.log(turma.id)} className="w-16 px-2 rounded-md p-1 text-xs font-medium text-primary bg-primary/15 border border-primary/30 hover:bg-primary/35 transition-colors flex flex-col items-center gap-1">
-                  <Users />
-                  Resp.
-                </button>
-                <button onClick={() => handleToggleStatusAluno(aluno.id)} className={`w-16 px-2 rounded-md p-1 text-xs font-medium transition-colors flex flex-col items-center gap-1 ${aluno.status === 'ativo' ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-700' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-700'}`}>
-                  {aluno.status === 'ativo' ? <ShieldMinus /> : <ShieldCheck />}
-                  {aluno.status === 'ativo' ? 'Inativar' : 'Ativar'}
-                </button>
-              </div>
+            {(() => {
+              const contatosEmergencia = (aluno.responsaveis || []).filter((vinculo) => vinculo.contatoEmergencia);
 
-              <div className="md:grow min-w-0 md:col-span-6 gap-3 my-3">
-                <div className="ps-2 flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                    {aluno.fotoUrl ? (
-                      <img src={aluno.fotoUrl} alt={aluno.nome} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Sem</div>
-                    )}
+              return (
+                <div key={aluno.id}>
+                  <div className="flex gap-3 md:items-center md:gap-3">
+                    <div className="flex hidden md:flex items-center gap-2 flex-wrap col-span-2 p-2">
+                      <button onClick={() => abrirEditarAluno(aluno)} className="w-16 px-2 rounded-md p-1 text-xs font-medium text-slate-700 bg-slate-200 border border-slate-300 hover:bg-slate-200 transition-colors flex flex-col items-center gap-1">
+                        <Pencil />
+                        Editar
+                      </button>
+                      <button onClick={() => abrirModalResponsaveis(aluno)} className="w-16 px-2 rounded-md p-1 text-xs font-medium text-primary bg-primary/15 border border-primary/30 hover:bg-primary/35 transition-colors flex flex-col items-center gap-1">
+                        <Users />
+                        Resp.
+                      </button>
+                      <button onClick={() => handleToggleStatusAluno(aluno.id)} className={`w-16 px-2 rounded-md p-1 text-xs font-medium transition-colors flex flex-col items-center gap-1 ${aluno.status === 'ativo' ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-700' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-700'}`}>
+                        {aluno.status === 'ativo' ? <ShieldMinus /> : <ShieldCheck />}
+                        {aluno.status === 'ativo' ? 'Inativar' : 'Ativar'}
+                      </button>
+                    </div>
+
+                    <div className="md:grow min-w-0 md:col-span-6 gap-3 my-3">
+                      <div className="ps-2 flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                          {aluno.fotoUrl ? (
+                            <img src={aluno.fotoUrl} alt={aluno.nome} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Sem</div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-medium text-slate-800 truncate">{aluno.nome}</div>
+                          <div className="text-sm text-slate-500 truncate">{turmaNome(aluno.turmaId)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-3 md:w-[300px] hidden md:flex">
+                      <div className="text-sm text-slate-500 truncate">
+                        { contatosEmergencia.map((vinculo) => 
+                          <div>
+                            <div className='font-bold'>{vinculo.nome || 'Responsável'}</div>
+                            <div>{vinculo.parentesco || 'Parentesco não informado'} - {vinculo.telefone || 'Sem telefone'}</div>
+                          </div>
+                        ) }
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-medium text-slate-800 truncate">{aluno.nome}</div>
-                    <div className="text-sm text-slate-500 truncate">{turmaNome(aluno.turmaId)}</div>
+
+                  <div className="grid grid-cols-3 md:hidden p-1">
+                    <button onClick={() => abrirEditarAluno(aluno)} className="h-8 px-2 rounded-s-md text-xs font-medium text-primary border border-primary border-r-0 inline-flex justify-center items-center gap-1">
+                      <Pencil />
+                    </button>
+                    <button onClick={() => abrirModalResponsaveis(aluno)} className="h-8 px-2 text-xs font-medium text-primary border border-primary inline-flex justify-center items-center gap-1">
+                      <Users />
+                    </button>
+                    <button onClick={() => handleToggleStatusAluno(aluno.id)} className={`h-8 px-2 rounded-e-lg text-xs font-medium border border-primary border-l-0 inline-flex justify-center items-center gap-1 ${aluno.status === 'ativo' ? 'text-red-600' : 'text-emerald-700'}`}>
+                      {aluno.status === 'ativo' ? <ShieldMinus /> : <ShieldCheck />}
+                    </button>
                   </div>
                 </div>
-              </div>
-
-              <div className="md:col-span-3 md:w-[300px] hidden md:flex">
-                <div className="text-sm text-slate-500 truncate">{turmaNome(aluno.turmaId)}</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:hidden p-1">
-              <button onClick={() => abrirEditarAluno(aluno)} className="h-8 px-2 rounded-s-md text-xs font-medium text-primary border border-primary border-r-0 inline-flex justify-center items-center gap-1">
-                <Pencil />
-              </button>
-              <button onClick={() => handleToggleStatusAluno(aluno.id)} className={`h-8 px-2 rounded-e-lg text-xs font-medium border border-primary border-l-0 inline-flex justify-center items-center gap-1 ${aluno.status === 'ativo' ? 'text-red-600' : 'text-emerald-700'}`}>
-                {aluno.status === 'ativo' ? <ShieldMinus /> : <ShieldCheck />}
-              </button>
-            </div>
+              );
+            })()}
           </div>
         ))}
+
+        {mostrarModalResponsaveis && alunoResponsaveisAtualizado && (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-xl p-4 md:p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-base font-bold text-slate-800">Responsáveis de {alunoResponsaveisAtualizado.nome}</h4>
+                <button onClick={fecharModalResponsaveis} className="h-8 px-3 rounded-lg text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200">
+                  Fechar
+                </button>
+              </div>
+
+              <form onSubmit={handleSalvarVinculoResponsavel} className="rounded-lg border border-slate-200 p-3 mb-3 flex flex-col gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1 text-sm text-slate-600">
+                    Responsável
+                    <select
+                      value={formResponsavelAluno.responsavelId}
+                      onChange={(event) => setFormResponsavelAluno((prev) => ({ ...prev, responsavelId: event.target.value }))}
+                      className="form-control !py-2.5"
+                      required
+                    >
+                      <option value="">Selecione</option>
+                      {responsaveisFiltradosModal.map((responsavel) => (
+                        <option key={responsavel.id} value={responsavel.id}>{responsavel.nome}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm text-slate-600">
+                    Parentesco
+                    <input
+                      value={formResponsavelAluno.parentesco}
+                      onChange={(event) => setFormResponsavelAluno((prev) => ({ ...prev, parentesco: event.target.value }))}
+                      placeholder="Ex.: Mãe, Pai, Avó, Tio"
+                      className="form-control !py-2.5"
+                      required
+                    />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={formResponsavelAluno.podeBuscar}
+                      onChange={(event) => setFormResponsavelAluno((prev) => ({ ...prev, podeBuscar: event.target.checked }))}
+                    />
+                    Pode buscar o aluno
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={formResponsavelAluno.contatoEmergencia}
+                      onChange={(event) => setFormResponsavelAluno((prev) => ({ ...prev, contatoEmergencia: event.target.checked }))}
+                    />
+                    Contato de emergência
+                  </label>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={salvandoResponsavelAluno}
+                    className="h-9 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors disabled:opacity-60"
+                  >
+                    {salvandoResponsavelAluno ? 'Salvando...' : 'Salvar vínculo'}
+                  </button>
+                </div>
+              </form>
+
+              <div className="rounded-lg border border-slate-200 p-3">
+                <div className="text-sm font-semibold text-slate-700 mb-2">Vínculos atuais ({vinculosResponsaveisAluno.length})</div>
+                <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                  {vinculosResponsaveisAluno.map((vinculo) => (
+                    <div key={vinculo.responsavelId} className={`rounded-lg border px-3 py-2 ${vinculo.contatoEmergencia ? 'bg-amber-50 border-amber-500' : ''}`}>
+                      <div className="flex items-center justify-start gap-2">
+                        
+                        <div className="flex hidden md:flex items-center gap-2 flex-wrap col-span-2 py-2">
+                          <button onClick={() => handleEditarVinculoResponsavel(vinculo)} className="w-16 px-2 rounded-md p-1 text-xs font-medium text-slate-700 bg-slate-200 border border-slate-300 hover:bg-slate-200 transition-colors flex flex-col items-center gap-1">
+                            <Pencil />
+                            Editar
+                          </button>
+                          <button onClick={() => handleRemoverVinculoResponsavel(vinculo.responsavelId)} className={`w-16 px-2 rounded-md p-1 text-xs font-medium transition-colors flex flex-col items-center gap-1 bg-red-50 text-red-600 hover:bg-red-100 border border-red-700`}>
+                            <Trash />
+                            Excluir
+                          </button>
+                        </div>
+                        
+                        <div className="ps-2 flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                            <img src={vinculo.avatarUrl} alt={vinculo.nome} className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-slate-800 truncate">{vinculo.nome || 'Responsável'}</div>
+                            <div className="text-sm text-slate-500 truncate">{vinculo.parentesco || 'Sem parentesco'} • {vinculo.podeBuscar ? 'Pode buscar' : 'Não pode buscar'}{vinculo.contatoEmergencia ? ' • Emergência' : ''}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className='w-full md:hidden'>
+                        <div className="grid grid-cols-2 md:hidden p-1">
+                          <button onClick={() => handleEditarVinculoResponsavel(vinculo)} className="h-8 px-2 rounded-s-md text-xs font-medium text-primary border border-primary border-r-0 inline-flex justify-center items-center gap-1">
+                            <Pencil />
+                          </button>
+                          <button onClick={() => handleRemoverVinculoResponsavel(vinculo.responsavelId)} className={`h-8 px-2 rounded-e-lg text-xs font-medium border border-primary border-l-0 inline-flex justify-center items-center gap-1`}>
+                            <X />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {vinculosResponsaveisAluno.length === 0 && <div className="text-sm text-slate-400">Nenhum responsável vinculado.</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!carregandoAlunos && alunosPaginados.length === 0 && (
           <div className="py-6 text-sm text-slate-500">Nenhum aluno encontrado.</div>
