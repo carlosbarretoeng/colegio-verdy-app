@@ -342,6 +342,7 @@ export default function AdminStudentsView() {
 
       await updateDoc(doc(db, 'students', alunoResponsaveisAtualizado.id), {
         responsaveis: atualizados,
+        responsaveisIds: atualizados.map((r) => r.responsavelId),
         updatedAt: serverTimestamp()
       });
 
@@ -378,6 +379,7 @@ export default function AdminStudentsView() {
 
       await updateDoc(doc(db, 'students', alunoResponsaveisAtualizado.id), {
         responsaveis: atualizados,
+        responsaveisIds: atualizados.map((r) => r.responsavelId),
         updatedAt: serverTimestamp()
       });
 

@@ -20,6 +20,11 @@ service cloud.firestore {
              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
     }
 
+    function isParent() {
+      return isSignedIn()
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'parent';
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
 
@@ -38,7 +43,7 @@ service cloud.firestore {
     }
 
     match /classrooms/{classroomId} {
-      allow read: if isAdmin() || (isTeacher() && resource.data.professorId == request.auth.uid);
+      allow read: if isAdmin() || (isTeacher() && resource.data.professorId == request.auth.uid) || isParent();
       allow write: if isAdmin();
     }
 
@@ -47,7 +52,10 @@ service cloud.firestore {
                   || (isTeacher()
                       && resource.data.turmaId is string
                       && exists(/databases/$(database)/documents/classrooms/$(resource.data.turmaId))
-                      && get(/databases/$(database)/documents/classrooms/$(resource.data.turmaId)).data.professorId == request.auth.uid);
+                      && get(/databases/$(database)/documents/classrooms/$(resource.data.turmaId)).data.professorId == request.auth.uid)
+                  || (isParent()
+                      && resource.data.responsaveisIds is list
+                      && request.auth.uid in resource.data.responsaveisIds);
 
       allow update: if isAdmin()
                     || (isTeacher()
@@ -60,7 +68,23 @@ service cloud.firestore {
     }
 
     match /events/{eventId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin() || isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /cadernetaEntries/{entryId} {
+      allow read: if isAdmin() || isTeacher()
+                  || (isParent()
+                      && exists(/databases/$(database)/documents/students/$(resource.data.studentId))
+                      && request.auth.uid in get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.responsaveisIds);
+      
+      allow create, update: if isAdmin()
+                            || (isTeacher()
+                                && request.resource.data.turmaId is string
+                                && exists(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId))
+                                && get(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId)).data.professorId == request.auth.uid);
+      
+      allow delete: if false;
     }
 
     match /{document=**} {

@@ -1,13 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, MessageSquare, MessageSquareDashed, School, Users } from 'lucide-react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { CalendarDays, Megaphone, MessageSquare, MessageSquareDashed, School, Users } from 'lucide-react';
+import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
-
-const MENSAGENS = [
-  { id: 'm1', titulo: 'Comunicado Geral', texto: 'Atualização do calendário escolar disponível para famílias.', tempo: 'há 10 min' },
-  { id: 'm2', titulo: 'Coordenação', texto: 'Lembrete sobre prazo de envio das avaliações mensais.', tempo: 'há 1 h' },
-  { id: 'm3', titulo: 'Secretaria', texto: 'Documentação de novos alunos em conferência.', tempo: 'há 3 h' }
-];
 
 export default function AdminDashboardView() {
   const [totalAlunos, setTotalAlunos] = useState(null);
@@ -37,7 +31,7 @@ export default function AdminDashboardView() {
     );
 
     unsubscribers.push(
-      onSnapshot(collection(db, 'events'), (snapshot) => {
+      onSnapshot(query(collection(db, 'events'), where('data', '>=', new Date().toISOString().split('T')[0]), orderBy('data', 'asc'), limit(5)), (snapshot) => {
         const lista = snapshot.docs.map((item) => {
           const data = item.data();
           return {
@@ -51,10 +45,6 @@ export default function AdminDashboardView() {
             anexoUrl: data.anexoUrl || '',
             anexoNome: data.anexoNome || ''
           };
-        }).sort((a, b) => {
-          const dataA = `${a.data || ''} ${a.horario || ''}`;
-          const dataB = `${b.data || ''} ${b.horario || ''}`;
-          return dataA.localeCompare(dataB);
         });
 
         setEventos(lista);
@@ -84,7 +74,7 @@ export default function AdminDashboardView() {
     { id: 'i1', label: 'Total de Alunos', valor: totalAlunos, icon: Users, color: 'text-primary bg-primary/10' },
     { id: 'i2', label: 'Turmas Ativas', valor: totalTurmasAtivas, icon: School, color: 'text-primary bg-primary/10' },
     { id: 'i3', label: 'Calendário', valor: eventos.length, icon: CalendarDays, color: 'text-primary bg-primary/10' },
-    { id: 'i4', label: 'Comunicados', valor: MENSAGENS.length, icon: MessageSquareDashed, color: 'text-primary bg-primary/10' }
+    { id: 'i4', label: 'Comunicados', valor: '-', icon: MessageSquareDashed, color: 'text-primary bg-primary/10' }
   ]), [totalAlunos, totalTurmasAtivas, eventos.length]);
 
   return (
@@ -118,7 +108,7 @@ export default function AdminDashboardView() {
           <div className="flex flex-col gap-3">
             {carregandoEventos && <div className="text-sm text-slate-500">Carregando eventos...</div>}
 
-            {!carregandoEventos && eventos.slice(0, 6).map((evento) => {
+            {!carregandoEventos && eventos.map((evento) => {
               const dataFormatada = formatarDataEvento(evento.data);
               return (
                 <div key={evento.id} className="rounded-xl border border-slate-200 bg-white/80 p-3 flex items-center gap-3">
@@ -148,21 +138,15 @@ export default function AdminDashboardView() {
         </div>
 
         <div className="glass-panel p-5 border border-slate-200/60">
-          <div className="flex items-center gap-2 mb-4">
-            <MessageSquare size={18} className="text-slate-500" />
-            <h3 className="text-lg font-bold text-slate-800">Mensagens Recentes</h3>
-          </div>
-
           <div className="flex flex-col gap-3">
-            {MENSAGENS.map((mensagem) => (
-              <div key={mensagem.id} className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                <div className="flex items-center justify-between gap-3 mb-1">
-                  <div className="font-semibold text-slate-800">{mensagem.titulo}</div>
-                  <div className="text-xs text-slate-400">{mensagem.tempo}</div>
+            <div className="text-center">
+                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                    <Megaphone size={32} className="text-slate-400" />
                 </div>
-                <div className="text-sm text-slate-500">{mensagem.texto}</div>
-              </div>
-            ))}
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Mensagens</h2>
+                <p className="text-slate-500">Esta funcionalidade está em desenvolvimento.</p>
+                <p className="text-sm text-slate-400 mt-1">Em breve você poderá se comunicar diretamente com pais, professore e direção.</p>
+            </div>
           </div>
         </div>
       </div>

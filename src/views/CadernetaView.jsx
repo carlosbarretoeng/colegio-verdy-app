@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Send, CheckCircle, Edit3, Camera, Coffee, Moon, Activity, X, ChevronDown, ArrowLeft, UserX, Save } from 'lucide-react';
+import { collection, query, where, getDocs, addDoc, setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import toast from 'react-hot-toast';
 
 const SegmentControls = ({ options, active, onChange }) => (
     <div className="flex bg-slate-100/50 p-0.5 rounded-xl w-full">
@@ -23,27 +26,54 @@ const initialDraftState = {
     obs: ''
 };
 
-// Objeto Global fora do componente para simular um "Banco de Dados" que persiste durante a sessão React 
-// id_aluno -> form //
-const globalDraftsStore = {};
-
 const CadernetaView = ({ student, turma, onBack, onUpdateStatus }) => {
     const [currentForm, setCurrentForm] = useState(initialDraftState);
     const [isAbsent, setIsAbsent] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [loadingCaderneta, setLoadingCaderneta] = useState(true);
 
-    // Carrega rascunho globalmente se houver
+    // Formatar data pra hoje no formato YYYY-MM-DD
+    const getTodayDate = () => {
+        const today = new Date();
+        return today.toISOString().split('T')[0];
+    };
+
+    // Carregar caderneta do Firestore se existir
     useEffect(() => {
-        if (student.status === 'absent') {
-            setIsAbsent(true);
-            setCurrentForm(globalDraftsStore[student.id] || initialDraftState);
-        } else {
-            setIsAbsent(false);
-            setCurrentForm(globalDraftsStore[student.id] || initialDraftState);
-        }
-    }, [student.id, student.status]);
+        const loadCaderneta = async () => {
+            try {
+                if (!db || !student.id) {
+                    setLoadingCaderneta(false);
+                    return;
+                }
+
+                const todayDate = getTodayDate();
+                const cadernetasQuery = query(
+                    collection(db, 'cadernetaEntries'),
+                    where('studentId', '==', student.id),
+                    where('date', '==', todayDate)
+                );
+
+                const snapshot = await getDocs(cadernetasQuery);
+                
+                if (!snapshot.empty) {
+                    const cadernetaData = snapshot.docs[0].data();
+                    setCurrentForm(cadernetaData.data || initialDraftState);
+                    setIsAbsent(cadernetaData.isAbsent || false);
+                }
+
+                setLoadingCaderneta(false);
+            } catch (error) {
+                console.error('Erro ao carregar caderneta:', error);
+                setLoadingCaderneta(false);
+            }
+        };
+
+        loadCaderneta();
+    }, [student.id]);
 
     const updateForm = (section, item, value) => {
-        if (isAbsent) return; // Bloqueia edição se estiver marcado como Faltou
+        if (isAbsent) return;
 
         const updatedForm = {
             ...currentForm,
@@ -55,8 +85,8 @@ const CadernetaView = ({ student, turma, onBack, onUpdateStatus }) => {
         if (section === 'obs') updatedForm.obs = value;
 
         setCurrentForm(updatedForm);
-        globalDraftsStore[student.id] = updatedForm;
-        // Se preencheu algo, automaticamente vira draft (rascunho) na listagem, se já nao estiver enviado
+        
+        // Se preencheu algo e não foi enviado, atualiza status para draft
         if (student.status !== 'sent') {
             onUpdateStatus('draft');
         }
@@ -65,22 +95,72 @@ const CadernetaView = ({ student, turma, onBack, onUpdateStatus }) => {
     const handleMarkAbsent = () => {
         if (isAbsent) {
             setIsAbsent(false);
-            onUpdateStatus('pending'); // Desmarcou a falta, volta a pending
+            onUpdateStatus('pending');
         } else {
             setIsAbsent(true);
-            onUpdateStatus('absent'); // Marca como faltou no diário
+            onUpdateStatus('absent');
         }
     };
 
-    const handleSendToParents = () => {
-        if (isAbsent) {
-            alert(`O registro de falta de ${student.name} já consta no sistema.`);
+    const handleSendToParents = async () => {
+        try {
+            setIsSaving(true);
+
+            if (!db) {
+                toast.error('Erro de conexão. Tente novamente.');
+                setIsSaving(false);
+                return;
+            }
+
+            const todayDate = getTodayDate();
+            const cadernetaData = {
+                studentId: student.id,
+                studentName: student.name,
+                turmaId: turma.id,
+                turmaName: turma.nome,
+                date: todayDate,
+                data: currentForm,
+                isAbsent: isAbsent,
+                status: isAbsent ? 'absent' : 'sent',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            };
+
+            // Verificar se já existe entrada de hoje
+            const cadernetasQuery = query(
+                collection(db, 'cadernetaEntries'),
+                where('studentId', '==', student.id),
+                where('date', '==', todayDate)
+            );
+
+            const snapshot = await getDocs(cadernetasQuery);
+
+            if (!snapshot.empty) {
+                // Atualizar existente
+                const docId = snapshot.docs[0].id;
+                await setDoc(doc(db, 'cadernetaEntries', docId), {
+                    ...cadernetaData,
+                    createdAt: snapshot.docs[0].data().createdAt // Manter a data de criação
+                });
+            } else {
+                // Criar novo
+                await addDoc(collection(db, 'cadernetaEntries'), cadernetaData);
+            }
+
+            if (isAbsent) {
+                toast.success(`Falta de ${student.name} registrada!`);
+            } else {
+                toast.success(`Caderneta de ${student.name} enviada!`);
+            }
+
+            onUpdateStatus(isAbsent ? 'absent' : 'sent');
+            setIsSaving(false);
             onBack();
-            return;
+        } catch (error) {
+            console.error('Erro ao salvar caderneta:', error);
+            toast.error('Erro ao salvar. Tente novamente.');
+            setIsSaving(false);
         }
-        alert(`Caderneta preenchida e enviada para os responsáveis de ${student.name}!`);
-        onUpdateStatus('sent');
-        onBack();
     };
 
     return (
@@ -115,10 +195,11 @@ const CadernetaView = ({ student, turma, onBack, onUpdateStatus }) => {
                         <UserX size={18} /> {isAbsent ? 'Marcado como Falta' : 'Indicar Falta'}
                     </button>
                     <button
-                        className={`btn-primary px-5 py-2.5 ${isAbsent ? 'opacity-50 pointer-events-none' : ''}`}
+                        className={`btn-primary px-5 py-2.5 ${isSaving ? 'opacity-50 pointer-events-none' : ''}`}
                         onClick={handleSendToParents}
+                        disabled={isSaving}
                     >
-                        <Send size={18} /> Enviar
+                        <Send size={18} /> {isAbsent ? 'Confirmar Falta' : 'Enviar'}
                     </button>
                 </div>
             </div>
