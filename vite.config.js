@@ -23,8 +23,8 @@ export default defineConfig({
         short_name: 'Verdy',
         description: 'Aplicativo do Colégio Verdy',
         lang: 'pt-BR',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
+        theme_color: '#064e3b',
+        background_color: '#064e3b',
         display: 'standalone',
         start_url: '/',
         icons: [
