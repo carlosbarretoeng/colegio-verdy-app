@@ -345,7 +345,7 @@ function MainApp() {
                     >
                         {isMobileDrawerOpen ? <X size={18} /> : <Menu size={18} />}
                     </button>
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white font-bold text-sm shadow-[0_2px_8px_rgba(16,185,129,0.3)]">V</div>
+                    <img src="/pwa-192x192.png" alt="Verdy" className="w-8 h-8 rounded-lg object-cover shadow-sm" />
                     <span className="font-bold text-slate-800 tracking-tight">Verdy</span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -401,7 +401,7 @@ function MainApp() {
                     <aside className="absolute left-0 top-0 h-full w-full bg-white border-r border-slate-200 p-5 flex flex-col">
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white font-bold text-sm">V</div>
+                                <img src="/pwa-192x192.png" alt="Verdy" className="w-8 h-8 rounded-lg object-cover shadow-sm" />
                                 <span className="font-bold text-slate-800 tracking-tight">Verdy</span>
                             </div>
                             <button
@@ -435,7 +435,7 @@ function MainApp() {
             {/* Desktop Sidebar */}
             <aside className="hidden lg:flex w-[280px] bg-white border-r border-slate-200 flex-col p-6 z-10 shrink-0">
                 <div className="flex items-center gap-3 mb-10 mt-2">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white font-bold text-xl shadow-[0_4px_10px_rgba(16,185,129,0.3)]">V</div>
+                    <img src="/pwa-192x192.png" alt="Colégio Verdy" className="w-10 h-10 rounded-xl object-cover shadow-md" />
                     <h2 className="font-bold text-2xl text-slate-800 tracking-tight">Colégio Verdy</h2>
                 </div>
 

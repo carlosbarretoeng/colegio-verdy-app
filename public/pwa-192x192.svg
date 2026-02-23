@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="Colégio Verdy">
-  <rect width="192" height="192" rx="36" fill="#14532d" />
-  <circle cx="96" cy="96" r="62" fill="#ffffff" opacity="0.12" />
-  <path d="M96 38c26 14 42 36 42 59 0 30-24 57-42 57s-42-27-42-57c0-23 16-45 42-59Z" fill="#dcfce7" />
-  <path d="M96 52c16 10 25 24 25 41 0 21-14 39-25 39s-25-18-25-39c0-17 9-31 25-41Z" fill="#166534" />
-  <path d="M96 58v74" stroke="#dcfce7" stroke-width="6" stroke-linecap="round" />
-</svg>

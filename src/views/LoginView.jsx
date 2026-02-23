@@ -44,7 +44,7 @@ const LoginView = () => {
             <div className="w-full max-w-md">
 
                 <div className="text-center mb-8">
-                    <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white font-bold text-3xl shadow-[0_4px_10px_rgba(16,185,129,0.3)] mb-4">V</div>
+                    <img src="/pwa-192x192.png" alt="Colégio Verdy" className="w-20 h-20 mx-auto rounded-2xl shadow-lg mb-4 object-cover" />
                     <h1 className="text-3xl font-bold text-slate-800">Colégio Verdy</h1>
                     <p className="text-slate-500 mt-2">{isLogin ? 'Acesse o portal da escola' : 'Crie seu acesso inicial'}</p>
                 </div>

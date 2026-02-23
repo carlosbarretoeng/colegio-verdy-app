@@ -6,6 +6,13 @@ import './index.css'
 
 registerSW({
     immediate: true,
+    onNeedRefresh() {
+        // Novo SW disponível + skipWaiting ativo → recarrega para aplicar
+        window.location.reload()
+    },
+    onOfflineReady() {
+        // silencioso – app pronto para uso offline
+    },
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(
