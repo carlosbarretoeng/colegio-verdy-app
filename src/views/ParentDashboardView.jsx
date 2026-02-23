@@ -59,12 +59,17 @@ const ParentDashboardView = () => {
 
     const q = query(
       collection(db, 'students'),
-      where('responsaveisIds', 'array-contains', uid),
-      where('status', '==', 'ativo')
+      where('responsaveisIds', 'array-contains', uid)
     );
 
     const unsub = onSnapshot(q,
-      (snap) => { setStudents(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); setLoading(false); },
+      (snap) => {
+        const list = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((s) => s.status === 'ativo');
+        setStudents(list);
+        setLoading(false);
+      },
       () => setLoading(false)
     );
 

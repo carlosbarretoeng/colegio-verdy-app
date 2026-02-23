@@ -53,8 +53,7 @@ service cloud.firestore {
                       && resource.data.turmaId is string
                       && exists(/databases/$(database)/documents/classrooms/$(resource.data.turmaId))
                       && get(/databases/$(database)/documents/classrooms/$(resource.data.turmaId)).data.professorId == request.auth.uid)
-                  || (isParent()
-                      && resource.data.responsaveisIds is list
+                  || (isSignedIn()
                       && request.auth.uid in resource.data.responsaveisIds);
 
       allow update: if isAdmin()
@@ -73,10 +72,7 @@ service cloud.firestore {
     }
 
     match /cadernetaEntries/{entryId} {
-      allow read: if isAdmin() || isTeacher()
-                  || (isParent()
-                      && exists(/databases/$(database)/documents/students/$(resource.data.studentId))
-                      && request.auth.uid in get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.responsaveisIds);
+      allow read: if isAdmin() || isTeacher() || isSignedIn();
       
       allow create, update: if isAdmin()
                             || (isTeacher()

@@ -8,7 +8,8 @@ import {
   query,
   serverTimestamp,
   updateDoc,
-  where
+  where,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -99,6 +100,23 @@ export default function AdminStudentsView() {
 
       setAlunos(lista);
       setCarregandoAlunos(false);
+
+      // Migração: preenche responsaveisIds para alunos que já têm responsaveis mas não têm o campo
+      const semIds = snapshot.docs.filter((d) => {
+        const data = d.data();
+        return Array.isArray(data.responsaveis) &&
+               data.responsaveis.length > 0 &&
+               !Array.isArray(data.responsaveisIds);
+      });
+
+      if (semIds.length > 0) {
+        const batch = writeBatch(db);
+        semIds.forEach((d) => {
+          const ids = d.data().responsaveis.map((r) => r.responsavelId).filter(Boolean);
+          batch.update(doc(db, 'students', d.id), { responsaveisIds: ids });
+        });
+        batch.commit().catch(() => {});
+      }
     }, (error) => {
       setCarregandoAlunos(false);
       setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível carregar os alunos do banco.' });
