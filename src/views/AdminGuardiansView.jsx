@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { maskTelefone } from '../utils/masks';
 import { Filter, Pencil, Plus, ShieldCheck, ShieldMinus, X } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { sendPasswordResetEmail } from 'firebase/auth';
@@ -85,7 +86,7 @@ export default function AdminGuardiansView() {
         };
       }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
-      setResponsaveis(lista);
+      setResponsaveis(lista.map((item) => ({ ...item, nomeRaw: item.nome === 'Sem nome' ? '' : item.nome })));
       setCarregando(false);
     }, (error) => {
       setCarregando(false);
@@ -114,9 +115,9 @@ export default function AdminGuardiansView() {
   const abrirEditarResponsavel = (responsavel) => {
     setResponsavelEmEdicaoId(responsavel.id);
     setFormResponsavel({
-      nome: responsavel.nome,
+      nome: responsavel.nomeRaw ?? responsavel.nome,
       email: responsavel.email || '',
-      telefone: responsavel.telefone || '',
+      telefone: maskTelefone(responsavel.telefone || ''),
       avatarUrl: responsavel.avatarUrl || ''
     });
     setMostrarFormResponsavel(true);
@@ -276,7 +277,7 @@ export default function AdminGuardiansView() {
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-slate-600">
                     Telefone
-                    <input value={formResponsavel.telefone} onChange={(event) => setFormResponsavel((prev) => ({ ...prev, telefone: event.target.value }))} placeholder="Telefone (opcional)" className="form-control !py-2.5" />
+                    <input value={formResponsavel.telefone} onChange={(event) => setFormResponsavel((prev) => ({ ...prev, telefone: maskTelefone(event.target.value) }))} placeholder="(XX) XXXXX-XXXX" className="form-control !py-2.5" />
                   </label>
                 </div>
               </div>

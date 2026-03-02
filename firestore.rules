@@ -71,6 +71,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.email is string;
+      allow update, delete: if isAdmin();
+    }
+
     match /cadernetaEntries/{entryId} {
       allow read: if isAdmin() || isTeacher() || isSignedIn();
       

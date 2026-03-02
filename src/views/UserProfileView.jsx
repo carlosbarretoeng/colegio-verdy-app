@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { maskTelefone } from '../utils/masks';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -33,7 +34,7 @@ export default function UserProfileView() {
 
   useEffect(() => {
     setNome(userProfile?.nome || '');
-    setTelefone(userProfile?.telefone || '');
+    setTelefone(maskTelefone(userProfile?.telefone || ''));
     setAvatarUrl(userProfile?.avatarUrl || '');
   }, [userProfile]);
 
@@ -61,7 +62,13 @@ export default function UserProfileView() {
     setSalvandoPerfil(true);
 
     try {
+      // Inclui uid e role para satisfazer as regras do Firestore tanto em create quanto em update.
       await setDoc(doc(db, 'users', currentUser.uid), {
+        uid: currentUser.uid,
+        role: userProfile?.role || 'parent',
+        email: userProfile?.email ?? null,
+        authEmail: userProfile?.authEmail ?? null,
+        username: userProfile?.username || '',
         nome: nome.trim(),
         telefone: telefone.trim(),
         avatarUrl: avatarUrl || null,
@@ -159,7 +166,7 @@ export default function UserProfileView() {
           </label>
           <label className="flex flex-col gap-1 text-sm text-slate-600 md:col-span-2">
             Telefone
-            <input value={telefone} onChange={(event) => setTelefone(event.target.value)} placeholder="Telefone" className="form-control !py-2.5" />
+            <input value={telefone} onChange={(event) => setTelefone(maskTelefone(event.target.value))} placeholder="(XX) XXXXX-XXXX" className="form-control !py-2.5" />
           </label>
         </div>
 

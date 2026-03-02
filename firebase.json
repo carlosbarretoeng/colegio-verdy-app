@@ -51,6 +51,7 @@
       "emailPassword": true
     }
   },
+  "extensions": {},
   "emulators": {
     "auth": {
       "port": 9099

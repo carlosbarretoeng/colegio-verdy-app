@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
-import { Mail, Lock, LogIn, UserPlus, AlertCircle } from 'lucide-react';
+import { User, Lock, LogIn, UserPlus, AlertCircle, Phone, Mail } from 'lucide-react';
+import { maskTelefone } from '../utils/masks';
 import { useAuth } from '../contexts/AuthContext';
 
 const LoginView = () => {
     const [isLogin, setIsLogin] = useState(true);
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [nomeCompleto, setNomeCompleto] = useState('');
+    const [telefone, setTelefone] = useState('');
+    const [username, setUsername] = useState('');
+    const [emailCadastro, setEmailCadastro] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -17,18 +23,39 @@ const LoginView = () => {
             setError('');
             setLoading(true);
             if (isLogin) {
-                await login(email, password);
+                await login(identifier, password);
             } else {
-                await register(email, password);
+                if (password !== confirmPassword) {
+                    setError('A confirmação da senha não confere.');
+                    return;
+                }
+
+                await register({
+                    nome: nomeCompleto,
+                    telefone,
+                    username,
+                    email: emailCadastro,
+                    password
+                });
             }
         } catch (err) {
             console.error(err);
             if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-                setError('E-mail ou senha inválidos. Verifique se você já tem cadastro.');
+                setError('Usuário ou senha inválidos. Verifique seus dados de acesso.');
             } else if (err.code === 'auth/email-already-in-use') {
                 setError('Este e-mail já está cadastrado no sistema.');
             } else if (err.code === 'auth/weak-password') {
                 setError('A senha deve ter pelo menos 6 caracteres.');
+            } else if (err.code === 'auth/invalid-email') {
+                setError('Informe um e-mail válido ou deixe o campo em branco.');
+            } else if (err.code === 'auth/invalid-username') {
+                setError('Usuário inválido. Use ao menos 3 caracteres (letras, números e ponto).');
+            } else if (err.code === 'auth/username-already-in-use') {
+                setError('Este nome de usuário já está em uso.');
+            } else if (err.code === 'auth/invalid-display-name') {
+                setError('Informe o nome completo.');
+            } else if (err.code === 'auth/username-not-linked') {
+                setError(err.message);
             } else if (err.code === 'auth/configuration-not-found') {
                 setError(err.message || 'Firebase não configurado para autenticação.');
             } else {
@@ -66,36 +93,141 @@ const LoginView = () => {
                     )}
 
                     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">E-mail</label>
-                            <div className="relative">
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={e => setEmail(e.target.value)}
-                                    placeholder="Seu email de acesso"
-                                    className="w-full form-control !pl-10 !py-3"
-                                    required
-                                />
-                                <Mail className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
-                            </div>
-                        </div>
+                        {isLogin ? (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Usuário ou E-mail</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={identifier}
+                                            onChange={e => setIdentifier(e.target.value)}
+                                            placeholder="Seu usuário de acesso"
+                                            className="w-full form-control !pl-10 !py-3"
+                                            required
+                                            autoComplete="username"
+                                        />
+                                        <User className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                                    </div>
+                                </div>
 
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">Senha</label>
-                            <div className="relative">
-                                <input
-                                    type="password"
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full form-control !pl-10 !py-3"
-                                    required
-                                    minLength={6}
-                                />
-                                <Lock className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
-                            </div>
-                        </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Senha</label>
+                                    <div className="relative">
+                                        <input
+                                            type="password"
+                                            value={password}
+                                            onChange={e => setPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="w-full form-control !pl-10 !py-3"
+                                            required
+                                            minLength={6}
+                                            autoComplete="current-password"
+                                        />
+                                        <Lock className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Nome Completo</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={nomeCompleto}
+                                            onChange={e => setNomeCompleto(e.target.value)}
+                                            placeholder="Seu nome completo"
+                                            className="w-full form-control !pl-10 !py-3"
+                                            required
+                                            autoComplete="name"
+                                        />
+                                        <User className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Telefone</label>
+                                    <div className="relative">
+                                        <input
+                                            type="tel"
+                                            value={telefone}
+                                            onChange={e => setTelefone(maskTelefone(e.target.value))}
+                                            placeholder="(XX) XXXXX-XXXX"
+                                            className="w-full form-control !pl-10 !py-3"
+                                            required
+                                            autoComplete="tel"
+                                        />
+                                        <Phone className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Usuário</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={username}
+                                            onChange={e => setUsername(e.target.value)}
+                                            placeholder="seu.usuario"
+                                            className="w-full form-control !pl-10 !py-3"
+                                            required
+                                            autoComplete="username"
+                                        />
+                                        <User className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">E-mail (opcional)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="email"
+                                            value={emailCadastro}
+                                            onChange={e => setEmailCadastro(e.target.value)}
+                                            placeholder="seu@email.com"
+                                            className="w-full form-control !pl-10 !py-3"
+                                            autoComplete="email"
+                                        />
+                                        <Mail className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Senha</label>
+                                    <div className="relative">
+                                        <input
+                                            type="password"
+                                            value={password}
+                                            onChange={e => setPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="w-full form-control !pl-10 !py-3"
+                                            required
+                                            minLength={6}
+                                            autoComplete="new-password"
+                                        />
+                                        <Lock className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Confirmação de Senha</label>
+                                    <div className="relative">
+                                        <input
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={e => setConfirmPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="w-full form-control !pl-10 !py-3"
+                                            required
+                                            minLength={6}
+                                            autoComplete="new-password"
+                                        />
+                                        <Lock className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
                         <button
                             type="submit"
@@ -111,7 +243,12 @@ const LoginView = () => {
                         <p>
                             {isLogin ? "Primeiro acesso? " : "Já possui uma conta? "}
                             <button
-                                onClick={() => { setIsLogin(!isLogin); setError(''); }}
+                                onClick={() => {
+                                    setIsLogin(!isLogin);
+                                    setError('');
+                                    setPassword('');
+                                    setConfirmPassword('');
+                                }}
                                 className="font-bold text-primary hover:text-primary-dark transition-colors"
                                 type="button"
                             >

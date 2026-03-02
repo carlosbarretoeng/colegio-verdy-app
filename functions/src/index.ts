@@ -44,6 +44,48 @@ function buildAvatarUrl(name: string): string {
 }
 
 /**
+ * Normaliza nome para base de username: "João da Silva" → "joao.da.silva".
+ * @param {string} nome Nome completo.
+ * @return {string} Base normalizada.
+ */
+function generateUsernameBase(nome: string): string {
+  return nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ".")
+    .replace(/[^a-z0-9.]/g, "");
+}
+
+/**
+ * Retorna username único, incrementando sufixo numérico se já existir.
+ * Se o documento já pertence ao mesmo uid, reutiliza sem incrementar.
+ * @param {FirebaseFirestore.Firestore} db Instância Firestore.
+ * @param {string} nome Nome do usuário.
+ * @param {string} uid UID Firebase Auth.
+ * @return {Promise<string>} Username único.
+ */
+async function resolveUniqueUsername(
+  db: ReturnType<typeof getFirestore>,
+  nome: string,
+  uid: string
+): Promise<string> {
+  const base = generateUsernameBase(nome) || uid.slice(0, 8);
+  let candidate = base;
+  let suffix = 2;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const snap = await db.collection("usernames").doc(candidate).get();
+    if (!snap.exists || snap.data()?.uid === uid) {
+      return candidate;
+    }
+    candidate = `${base}${suffix}`;
+    suffix += 1;
+  }
+}
+
+/**
  * Cria conta de professor via admin e prepara perfil no Firestore.
  * Apenas usuários com role admin podem executar.
  */
@@ -158,9 +200,16 @@ export const createTeacherAccount = onCall(async (request) => {
     await userRef.set(baseTeacherUser, {merge: true});
   }
 
+  const username = await resolveUniqueUsername(db, nome, userRecord.uid);
+  await db.collection("usernames").doc(username).set({
+    email,
+    uid: userRecord.uid,
+  });
+
   return {
     uid: userRecord.uid,
     email,
+    username,
     alreadyExists,
   };
 });
@@ -276,9 +325,16 @@ export const createParentAccount = onCall(async (request) => {
     await userRef.set(baseParentUser, {merge: true});
   }
 
+  const username = await resolveUniqueUsername(db, nome, userRecord.uid);
+  await db.collection("usernames").doc(username).set({
+    email,
+    uid: userRecord.uid,
+  });
+
   return {
     uid: userRecord.uid,
     email,
+    username,
     alreadyExists,
   };
 });
