@@ -76,7 +76,12 @@ service cloud.firestore {
       allow create: if isSignedIn()
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.email is string;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && resource.data.uid == request.auth.uid
+                        && request.resource.data.uid == request.auth.uid
+                        && request.resource.data.email is string);
+      allow delete: if isAdmin();
     }
 
     match /cadernetaEntries/{entryId} {
@@ -88,6 +93,23 @@ service cloud.firestore {
                                 && exists(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId))
                                 && get(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId)).data.professorId == request.auth.uid);
       
+      allow delete: if false;
+    }
+
+    match /merendaSemanal/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /feedback/{docId} {
+      // Qualquer usuário autenticado pode enviar; cada um lê apenas as próprias mensagens; admin lê tudo.
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.mensagem is string
+                    && request.resource.data.criadoEm == request.time;
+      allow update: if isAdmin(); // apenas admin pode marcar como 'lido'
       allow delete: if false;
     }
 

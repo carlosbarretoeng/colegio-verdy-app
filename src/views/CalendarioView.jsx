@@ -84,7 +84,8 @@ export const CalendarVisualization = ({ embedded = false }) => {
 
   const renderCalendarDays = () => {
     const days = [];
-    const todayStr = new Date().toISOString().split('T')[0];
+    const _td = new Date();
+    const todayStr = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
 
     for (let i = 0; i < firstDayOfMonth; i++) {
       days.push(<div key={`empty-${i}`} className="h-10 lg:h-24 bg-slate-50/50 rounded-xl border border-transparent"></div>);

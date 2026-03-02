@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Calendar, MessageSquare, BookOpen, LogOut, User, School, Users, ChevronDown, Menu, X } from 'lucide-react';
+import { Calendar, MessageSquare, BookOpen, LogOut, User, School, Users, ChevronDown, Menu, X, UtensilsCrossed, Lightbulb } from 'lucide-react';
 import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { Toaster } from 'react-hot-toast';
 
@@ -17,6 +17,9 @@ import AdminTeachersView from './views/AdminTeachersView';
 import AdminGuardiansView from './views/AdminGuardiansView';
 import AdminClassroomsView from './views/AdminClassroomsView';
 import UserProfileView from './views/UserProfileView';
+import AdminMerendaView from './views/AdminMerendaView';
+import MerendaView from './views/MerendaView';
+import FeedbackView from './views/FeedbackView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { db } from './config/firebase';
 
@@ -42,7 +45,7 @@ function MainApp() {
         if (userRole === 'admin' && !activeTab.startsWith('admin-') && activeTab !== 'perfil') {
             setActiveTab('admin-dashboard');
         }
-        if (userRole === 'parent' && !['parent-inicio', 'calendario', 'comunicacao', 'perfil'].includes(activeTab)) {
+        if (userRole === 'parent' && !['parent-inicio', 'calendario', 'comunicacao', 'merenda', 'vale-dev', 'perfil'].includes(activeTab)) {
             setActiveTab('parent-inicio');
         }
     }, [userRole, activeTab]);
@@ -253,6 +256,7 @@ function MainApp() {
     // --- Roteamento Principal ---
     const renderContent = () => {
         if (activeTab === 'perfil') return <UserProfileView />;
+        if (activeTab === 'vale-dev') return <FeedbackView />;
 
         // Roteamento baseado no Role (Perfil)
         if (userRole === 'admin') {
@@ -262,12 +266,15 @@ function MainApp() {
             if (activeTab === 'admin-responsaveis') return <AdminGuardiansView />;
             if (activeTab === 'admin-alunos') return <AdminStudentsView />;
             if (activeTab === 'admin-turmas') return <AdminClassroomsView />;
+            if (activeTab === 'admin-merenda') return <AdminMerendaView />;
+            if (activeTab === 'vale-dev') return <FeedbackView />;
             return <AdminStudentsView />;
         }
 
         if (userRole === 'parent') {
             if (activeTab === 'calendario') return <CalendarioView />;
             if (activeTab === 'comunicacao') return <ComunicacaoView />;
+            if (activeTab === 'merenda') return <MerendaView />;
             return <ParentDashboardView />;
         }
 
@@ -276,6 +283,8 @@ function MainApp() {
             case 'caderneta': return renderCadernetaFlow();
             case 'calendario': return <CalendarioView />;
             case 'comunicacao': return <ComunicacaoView />;
+            case 'merenda': return <MerendaView />;
+            case 'vale-dev': return <FeedbackView />;
             default: return renderCadernetaFlow();
         }
     };
@@ -308,15 +317,21 @@ function MainApp() {
             { id: 'admin-turmas', label: 'Turmas', icon: School },
             { id: 'admin-responsaveis', label: 'Responsáveis', icon: Users },
             { id: 'admin-alunos', label: 'Alunos', icon: BookOpen },
+            { id: 'admin-merenda', label: 'Cardápio', icon: UtensilsCrossed },
+            { id: 'vale-dev', label: 'Sugestões', icon: Lightbulb },
         ]
         : userRole === 'parent'
             ? [
                 { id: 'parent-inicio', label: getNavLabel(), icon: BookOpen },
                 { id: 'comunicacao', label: 'Mensagens', icon: MessageSquare },
+                { id: 'merenda', label: 'Cardápio', icon: UtensilsCrossed },
+                { id: 'vale-dev', label: 'Sugestões', icon: Lightbulb },
             ]
             : [
             { id: 'caderneta', label: getNavLabel(), icon: BookOpen },
             { id: 'comunicacao', label: 'Mensagens', icon: MessageSquare },
+            { id: 'merenda', label: 'Cardápio', icon: UtensilsCrossed },
+            { id: 'vale-dev', label: 'Sugestões', icon: Lightbulb },
             ];
 
     const userDisplayName = userProfile?.nome || currentUser?.displayName || 'Usuário';

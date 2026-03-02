@@ -16,6 +16,12 @@ service firebase.storage {
       allow write: if isAdmin();
     }
 
+    match /feedback/{uid}/{allPaths=**} {
+      // Usuário só pode escrever na própria pasta; qualquer autenticado pode ler (para exibir as imagens).
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == uid;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

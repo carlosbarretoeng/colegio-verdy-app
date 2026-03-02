@@ -30,8 +30,10 @@ export default function AdminDashboardView() {
       })
     );
 
+    const _td = new Date();
+    const todayStr = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
     unsubscribers.push(
-      onSnapshot(query(collection(db, 'events'), where('data', '>=', new Date().toISOString().split('T')[0]), orderBy('data', 'asc'), limit(5)), (snapshot) => {
+      onSnapshot(query(collection(db, 'events'), where('data', '>=', todayStr), orderBy('data', 'asc'), limit(5)), (snapshot) => {
         const lista = snapshot.docs.map((item) => {
           const data = item.data();
           return {

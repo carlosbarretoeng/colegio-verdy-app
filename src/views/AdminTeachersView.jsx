@@ -151,7 +151,11 @@ export default function AdminTeachersView() {
       const email = formProfessor.email.trim().toLowerCase();
       const telefone = formProfessor.telefone.trim();
       const avatarUrl = formProfessor.avatarUrl.trim();
-      if (!nome || !email) {
+      if (!nome) {
+        setSalvandoProfessor(false);
+        return;
+      }
+      if (!professorEmEdicaoId && !email) {
         setSalvandoProfessor(false);
         return;
       }

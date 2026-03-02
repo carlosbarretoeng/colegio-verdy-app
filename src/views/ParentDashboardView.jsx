@@ -97,7 +97,8 @@ const ParentDashboardView = () => {
   useEffect(() => {
     if (!db || students.length === 0) { setTodayEntries({}); return undefined; }
 
-    const todayDate = new Date().toISOString().split('T')[0];
+    const _td = new Date();
+    const todayDate = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
     const studentIds = students.map((s) => s.id);
     const chunks = [];
     for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));

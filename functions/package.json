@@ -10,7 +10,9 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "set-role": "node scripts/setUserRole.mjs",
-    "seed:demo": "node scripts/seedDemoData.mjs"
+    "seed:demo": "node scripts/seedDemoData.mjs",
+    "import-users": "node scripts/importUsers.mjs",
+    "import-students": "node scripts/importStudents.mjs"
   },
   "engines": {
     "node": "24"

@@ -94,20 +94,21 @@ export const AuthProvider = ({ children }) => {
                             }, { merge: true });
                         }
 
-                        // Reparo silencioso: se o doc usernames estiver ausente, recria.
+                        // Reparo: se o doc usernames estiver ausente, recria.
+                        // Garante token fresco antes de escrever.
                         if (data.username) {
                             try {
+                                await user.getIdToken();
                                 const usernameRef = doc(db, 'usernames', data.username);
                                 const usernameSnap = await getDoc(usernameRef);
                                 if (!usernameSnap.exists()) {
                                     const authEmailForUsername = data.authEmail || user.email;
                                     if (authEmailForUsername) {
                                         await setDoc(usernameRef, { email: authEmailForUsername, uid: user.uid });
-                                        console.debug('[auth] doc usernames reparado:', data.username);
                                     }
                                 }
-                            } catch (repairErr) {
-                                console.warn('[auth] reparo do doc usernames falhou:', repairErr);
+                            } catch {
+                                // silently ignore repair failure
                             }
                         }
 
@@ -165,30 +166,30 @@ export const AuthProvider = ({ children }) => {
     const login = async (identifier, password) => {
         if (!auth) return Promise.reject({ code: 'auth/configuration-not-found', message: firebaseConfigError });
 
-        // Após login bem-sucedido, garante que o doc usernames existe (reparo silencioso).
+        // Após login bem-sucedido, garante que o doc usernames existe.
         const repairUsernameDoc = async (cred) => {
-            try {
-                const userDocSnap = await getDoc(doc(db, 'users', cred.user.uid));
-                if (!userDocSnap.exists()) return;
-                const data = userDocSnap.data();
-                if (!data.username) return;
-                const usernameRef = doc(db, 'usernames', data.username);
-                const usernameSnap = await getDoc(usernameRef);
-                if (!usernameSnap.exists()) {
-                    const authEmailForUsername = data.authEmail || cred.user.email;
-                    if (authEmailForUsername) {
-                        await setDoc(usernameRef, { email: authEmailForUsername, uid: cred.user.uid });
-                    }
+            const userDocSnap = await getDoc(doc(db, 'users', cred.user.uid));
+            if (!userDocSnap.exists()) return;
+            const data = userDocSnap.data();
+            if (!data.username) return;
+            const usernameRef = doc(db, 'usernames', data.username);
+            const usernameSnap = await getDoc(usernameRef);
+            if (!usernameSnap.exists()) {
+                const authEmailForUsername = data.authEmail || cred.user.email;
+                if (authEmailForUsername) {
+                    await setDoc(usernameRef, { email: authEmailForUsername, uid: cred.user.uid });
                 }
-            } catch (e) {
-                console.warn('[login] reparo do doc usernames falhou:', e);
             }
         };
 
         // Login direto por email — repara o doc usernames em seguida.
         if (identifier.includes('@')) {
             const cred = await signInWithEmailAndPassword(auth, identifier, password);
-            await repairUsernameDoc(cred);
+            try {
+                await repairUsernameDoc(cred);
+            } catch {
+                // Silently ignore — repair failure must not block login.
+            }
             return cred;
         }
 
@@ -303,7 +304,6 @@ export const AuthProvider = ({ children }) => {
                     return; // já existe para este uid
                 }
                 await setDoc(usernameRef, { email: authEmail, uid: credential.user.uid });
-                console.debug('[register] doc usernames criado:', normalizedUsername, '->', authEmail);
             });
         } catch (error) {
             pendingRegistrationRef.current = null;

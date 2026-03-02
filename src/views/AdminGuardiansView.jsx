@@ -140,7 +140,11 @@ export default function AdminGuardiansView() {
       const email = formResponsavel.email.trim().toLowerCase();
       const telefone = formResponsavel.telefone.trim();
       const avatarUrl = formResponsavel.avatarUrl.trim();
-      if (!nome || !email) {
+      if (!nome) {
+        setSalvandoResponsavel(false);
+        return;
+      }
+      if (!responsavelEmEdicaoId && !email) {
         setSalvandoResponsavel(false);
         return;
       }
