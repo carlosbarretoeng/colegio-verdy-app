@@ -333,7 +333,7 @@ export default function AdminGuardiansView() {
                       <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Sem</div>
                     )}
                   </div>
-                  <div>
+                  <div className='flex flex-col flex-1 min-w-0'>
                     <div className="font-medium text-slate-800 truncate">{responsavel.nome}</div>
                     <div className="text-sm text-slate-500 truncate">{responsavel.email}</div>
                     <div className="md:hidden text-sm text-slate-500 truncate">{responsavel.telefone || 'Sem telefone'}</div>

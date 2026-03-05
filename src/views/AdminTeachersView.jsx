@@ -370,7 +370,6 @@ export default function AdminTeachersView() {
                   <div className="">
                     <div className="font-medium text-slate-800 truncate">{professor.nome}</div>
                     <div className="text-sm text-slate-500 truncate">{professor.disciplina || 'Sem disciplina'}</div>
-                    <div className="md:hidden text-sm text-slate-500 truncate">{professor.email}</div>
                   </div>
                 </div>
               </div>

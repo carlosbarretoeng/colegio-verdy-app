@@ -14,7 +14,7 @@ import {
 import { db } from '../config/firebase';
 
 const ITEMS_PER_PAGE = 5;
-const EMPTY_FORM = { nome: '', turmaId: '', fotoUrl: '' };
+const EMPTY_FORM = { nome: '', turmaIds: [], fotoUrl: '' };
 const EMPTY_RESP_VINCULO_FORM = { responsavelId: '', parentesco: '', podeBuscar: true, contatoEmergencia: false };
 
 function createAvatarUrl(nome) {
@@ -91,7 +91,7 @@ export default function AdminStudentsView() {
         return {
           id: item.id,
           nome: data.nome || 'Sem nome',
-          turmaId: data.turmaId || '',
+          turmaIds: data.turmaIds || (data.turmaId ? [data.turmaId] : []),
           status: data.status || 'ativo',
           fotoUrl: data.fotoUrl || '',
           responsaveis: Array.isArray(data.responsaveis) ? data.responsaveis : []
@@ -174,7 +174,9 @@ export default function AdminStudentsView() {
     return alunos.filter((aluno) => {
       const nomeValido = aluno.nome.toLowerCase().includes(filtroAlunoNome.toLowerCase());
       const statusValido = filtroAlunoStatus === 'todos' ? true : aluno.status === filtroAlunoStatus;
-      const turmaValida = filtroAlunoTurma === 'todas' ? true : aluno.turmaId === filtroAlunoTurma;
+      const turmaValida = filtroAlunoTurma === 'todas'
+        ? true
+        : (Array.isArray(aluno.turmaIds) ? aluno.turmaIds.includes(filtroAlunoTurma) : aluno.turmaId === filtroAlunoTurma);
       return nomeValido && statusValido && turmaValida;
     });
   }, [alunos, filtroAlunoNome, filtroAlunoStatus, filtroAlunoTurma]);
@@ -195,7 +197,7 @@ export default function AdminStudentsView() {
     setAlunoEmEdicaoId(aluno.id);
     setFormAluno({
       nome: aluno.nome,
-      turmaId: aluno.turmaId || '',
+      turmaIds: Array.isArray(aluno.turmaIds) ? aluno.turmaIds : (aluno.turmaId ? [aluno.turmaId] : []),
       fotoUrl: aluno.fotoUrl || ''
     });
     setMostrarFormAluno(true);
@@ -229,8 +231,8 @@ export default function AdminStudentsView() {
     setSalvandoAluno(true);
 
     const nome = formAluno.nome.trim();
-    const turmaId = formAluno.turmaId;
-    if (!nome || !turmaId) {
+    const turmaIds = Array.isArray(formAluno.turmaIds) ? formAluno.turmaIds.filter(Boolean) : [];
+    if (!nome || turmaIds.length === 0) {
       setSalvandoAluno(false);
       return;
     }
@@ -243,7 +245,7 @@ export default function AdminStudentsView() {
       if (!alunoEmEdicaoId) {
         await addDoc(collection(db, 'students'), {
           nome,
-          turmaId,
+          turmaIds,
           fotoUrl,
           status: 'ativo',
           createdAt: serverTimestamp(),
@@ -253,7 +255,7 @@ export default function AdminStudentsView() {
       } else {
         await updateDoc(doc(db, 'students', alunoEmEdicaoId), {
           nome,
-          turmaId,
+          turmaIds,
           fotoUrl,
           updatedAt: serverTimestamp()
         });
@@ -472,11 +474,21 @@ export default function AdminStudentsView() {
                     <input value={formAluno.nome} onChange={(event) => setFormAluno((prev) => ({ ...prev, nome: event.target.value }))} placeholder="Nome do aluno" className="form-control !py-2.5" required />
                   </label>
                   <label className="flex flex-col md:col-span-2 gap-1 text-sm text-slate-600">
-                    Turma
-                    <select value={formAluno.turmaId} onChange={(event) => setFormAluno((prev) => ({ ...prev, turmaId: event.target.value }))} className="form-control !py-2.5" required>
-                      <option value="">Selecione a turma</option>
+                    Turmas
+                    <select
+                      multiple
+                      value={formAluno.turmaIds}
+                      onChange={(event) => {
+                        const options = Array.from(event.target.selectedOptions).map((opt) => opt.value);
+                        setFormAluno((prev) => ({ ...prev, turmaIds: options }));
+                      }}
+                      className="form-control !py-2.5"
+                      required
+                      size={Math.min(4, turmas.length)}
+                    >
                       {turmas.map((turma) => <option key={turma.id} value={turma.id}>{turma.nome}</option>)}
                     </select>
+                    <span className="text-xs text-slate-500">Segure Ctrl (Windows) ou Cmd (Mac) para selecionar mais de uma.</span>
                   </label>
                 </div>
               </div>
@@ -541,9 +553,13 @@ export default function AdminStudentsView() {
                             <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Sem</div>
                           )}
                         </div>
-                        <div>
+                        <div className='flex flex-col flex-1 min-w-0'>
                           <div className="font-medium text-slate-800 truncate">{aluno.nome}</div>
-                          <div className="text-sm text-slate-500 truncate">{turmaNome(aluno.turmaId)}</div>
+                          <div className="text-xs text-slate-500 truncate">
+                            {Array.isArray(aluno.turmaIds) && aluno.turmaIds.length > 0
+                              ? aluno.turmaIds.map((id) => turmaNome(id)).join(', ')
+                              : turmaNome(aluno.turmaId)}
+                          </div>
                         </div>
                       </div>
                     </div>

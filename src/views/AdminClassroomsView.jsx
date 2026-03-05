@@ -13,7 +13,7 @@ import {
 import { db } from '../config/firebase';
 
 const ITEMS_PER_PAGE = 5;
-const EMPTY_FORM = { nome: '', periodo: 'Integral', professorId: '' };
+const EMPTY_FORM = { nome: '', periodo: 'Integral', professoresIds: [] };
 
 export default function AdminClassroomsView() {
   const [turmas, setTurmas] = useState([]);
@@ -52,8 +52,8 @@ export default function AdminClassroomsView() {
           id: item.id,
           nome: data.nome || 'Sem nome',
           periodo: data.periodo || '',
-          professorId: data.professorId || '',
-          professorNome: data.professorNome || '',
+          professoresIds: data.professoresIds || (data.professorId ? [data.professorId] : []),
+          professoresNomes: data.professoresNomes || (data.professorNome ? [data.professorNome] : []),
           status: data.status || 'ativa'
         };
       }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -100,7 +100,7 @@ export default function AdminClassroomsView() {
         return {
           id: item.id,
           nome: data.nome || 'Sem nome',
-          turmaId: data.turmaId || '',
+          turmaIds: data.turmaIds || (data.turmaId ? [data.turmaId] : []),
           status: data.status || 'ativo',
           fotoUrl: data.fotoUrl || ''
         };
@@ -136,7 +136,7 @@ export default function AdminClassroomsView() {
 
   const alunosDaTurma = useMemo(() => {
     if (!turmaGerenciadaId) return [];
-    return alunos.filter((aluno) => aluno.turmaId === turmaGerenciadaId);
+    return alunos.filter((aluno) => Array.isArray(aluno.turmaIds) && aluno.turmaIds.includes(turmaGerenciadaId));
   }, [alunos, turmaGerenciadaId]);
 
   const alunosModalFiltrados = useMemo(() => {
@@ -157,7 +157,7 @@ export default function AdminClassroomsView() {
 
   const abrirEditarTurma = (turma) => {
     setTurmaEmEdicaoId(turma.id);
-    setFormTurma({ nome: turma.nome, periodo: turma.periodo || '', professorId: turma.professorId || '' });
+    setFormTurma({ nome: turma.nome, periodo: turma.periodo || '', professoresIds: turma.professoresIds || (turma.professorId ? [turma.professorId] : []) });
     setMostrarFormTurma(true);
   };
 
@@ -176,10 +176,10 @@ export default function AdminClassroomsView() {
 
       const nome = formTurma.nome.trim();
       const periodo = formTurma.periodo.trim();
-      const professorId = formTurma.professorId;
-      const professorSelecionado = professores.find((professor) => professor.id === professorId);
+      const professoresIds = formTurma.professoresIds;
+      const professoresSelecionados = professores.filter((professor) => professoresIds.includes(professor.id));
 
-      if (!nome || !periodo || !professorId || !professorSelecionado) {
+      if (!nome || !periodo || !Array.isArray(professoresIds) || professoresIds.length === 0 || professoresSelecionados.length === 0) {
         setSalvandoTurma(false);
         return;
       }
@@ -187,12 +187,14 @@ export default function AdminClassroomsView() {
       try {
         if (!db) throw new Error('Banco de dados não configurado.');
 
+        const professoresNomes = professoresSelecionados.map((p) => p.nome);
+
         if (!turmaEmEdicaoId) {
           await addDoc(collection(db, 'classrooms'), {
             nome,
             periodo,
-            professorId,
-            professorNome: professorSelecionado.nome,
+            professoresIds,
+            professoresNomes,
             status: 'ativa',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
@@ -202,8 +204,8 @@ export default function AdminClassroomsView() {
           await updateDoc(doc(db, 'classrooms', turmaEmEdicaoId), {
             nome,
             periodo,
-            professorId,
-            professorNome: professorSelecionado.nome,
+            professoresIds,
+            professoresNomes,
             updatedAt: serverTimestamp()
           });
           setFeedback({ tipo: 'sucesso', mensagem: 'Dados da turma atualizados com sucesso.' });
@@ -251,16 +253,17 @@ export default function AdminClassroomsView() {
       setSalvandoVinculo(true);
       setFeedback({ tipo: '', mensagem: '' });
 
+      const turmaIds = Array.isArray(aluno.turmaIds) ? [...aluno.turmaIds] : [];
+      if (!turmaIds.includes(turmaGerenciadaId)) turmaIds.push(turmaGerenciadaId);
+
       await updateDoc(doc(db, 'students', aluno.id), {
-        turmaId: turmaGerenciadaId,
+        turmaIds,
         updatedAt: serverTimestamp()
       });
 
       setFeedback({
         tipo: 'sucesso',
-        mensagem: aluno.turmaId && aluno.turmaId !== turmaGerenciadaId
-          ? 'Aluno transferido para a turma com sucesso.'
-          : 'Aluno vinculado à turma com sucesso.'
+        mensagem: 'Aluno vinculado à turma com sucesso.'
       });
     } catch (error) {
       setFeedback({ tipo: 'erro', mensagem: error?.message || 'Não foi possível vincular o aluno.' });
@@ -271,13 +274,17 @@ export default function AdminClassroomsView() {
 
   const handleRemoverAlunoDaTurma = async (alunoId) => {
     try {
-      if (!db) throw new Error('Dados não disponíveis para remover aluno.');
+      if (!db || !turmaGerenciadaId) throw new Error('Dados não disponíveis para remover aluno.');
 
       setSalvandoVinculo(true);
       setFeedback({ tipo: '', mensagem: '' });
 
+      const aluno = alunos.find((a) => a.id === alunoId);
+      if (!aluno) throw new Error('Aluno não encontrado.');
+      const turmaIds = Array.isArray(aluno.turmaIds) ? aluno.turmaIds.filter((id) => id !== turmaGerenciadaId) : [];
+
       await updateDoc(doc(db, 'students', alunoId), {
-        turmaId: null,
+        turmaIds,
         updatedAt: serverTimestamp()
       });
 
@@ -335,12 +342,22 @@ export default function AdminClassroomsView() {
                 </select>
               </label>
               <label className="flex flex-col gap-1 text-sm text-slate-600">
-                Professor responsável
-                <select value={formTurma.professorId} onChange={(event) => setFormTurma((prev) => ({ ...prev, professorId: event.target.value }))} className="form-control !py-2.5" required>
-                  <option value="">Selecione</option>
-                  {professores.filter((professor) => professor.status === 'ativo' || professor.id === formTurma.professorId)
+                Professores responsáveis
+                <select
+                  multiple
+                  value={formTurma.professoresIds}
+                  onChange={(event) => {
+                    const options = Array.from(event.target.selectedOptions).map((opt) => opt.value);
+                    setFormTurma((prev) => ({ ...prev, professoresIds: options }));
+                  }}
+                  className="form-control !py-2.5"
+                  required
+                  size={Math.min(4, professores.length)}
+                >
+                  {professores.filter((professor) => professor.status === 'ativo' || formTurma.professoresIds.includes(professor.id))
                     .map((professor) => <option key={professor.id} value={professor.id}>{professor.nome}</option>)}
                 </select>
+                <span className="text-xs text-slate-500">Segure Ctrl (Windows) ou Cmd (Mac) para selecionar mais de um.</span>
               </label>
             </div>
 
@@ -459,8 +476,9 @@ export default function AdminClassroomsView() {
               {buscaAlunoModal.trim() && (
                 <div className="flex flex-col gap-2 max-h-96 overflow-y-auto">
                   {alunosModalFiltrados.map((aluno) => {
-                    const jaNaTurma = aluno.turmaId === turmaGerenciadaId;
-                    const emOutraTurma = aluno.turmaId && !jaNaTurma;
+                    const turmaIds = Array.isArray(aluno.turmaIds) ? aluno.turmaIds : [];
+                    const jaNaTurma = turmaIds.includes(turmaGerenciadaId);
+                    const emOutraTurma = turmaIds.length > 0 && !jaNaTurma;
 
                     return (
                       <div key={aluno.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2">
@@ -477,7 +495,7 @@ export default function AdminClassroomsView() {
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-slate-700 truncate">{aluno.nome}</div>
                             {jaNaTurma && <div className="text-xs text-emerald-700">Já está nesta turma</div>}
-                            {emOutraTurma && <div className="text-xs text-amber-700">Está em outra turma</div>}
+                            {emOutraTurma && <div className="text-xs text-amber-700">Está em outra(s) turma(s)</div>}
                           </div>
                         </div>
 
@@ -486,7 +504,7 @@ export default function AdminClassroomsView() {
                           onClick={() => handleVincularAluno(aluno)}
                           className="h-8 px-2 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
                         >
-                          {jaNaTurma ? 'Vinculado' : emOutraTurma ? 'Transferir' : 'Vincular'}
+                          {jaNaTurma ? 'Vinculado' : emOutraTurma ? 'Adicionar' : 'Vincular'}
                         </button>
                       </div>
                     );
@@ -521,7 +539,11 @@ export default function AdminClassroomsView() {
               <div className="md:grow min-w-0 md:col-span-6 gap-3 my-3">
                 <div className="ps-2">
                   <div className="font-medium text-slate-800 truncate">{turma.nome} - {turma.periodo || 'Sem período'}</div>
-                  <div className="text-sm text-slate-500 truncate">{turma.professorNome || 'Não definido'}</div>
+                  <div className="text-sm text-slate-500 truncate">
+                    {turma.professoresNomes && turma.professoresNomes.length > 0
+                      ? turma.professoresNomes.join(', ')
+                      : 'Não definido'}
+                  </div>
                 </div>
               </div>
             </div>

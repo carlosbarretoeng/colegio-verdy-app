@@ -61,44 +61,52 @@ const isToday = (dateStr) => dateStr === new Date().toISOString().split('T')[0];
 /* ────────────────────────────────────────────
    View principal
 ──────────────────────────────────────────── */
-const ParentStudentCadernetaView = ({ student, turmaNome, onBack }) => {
-  const [entries, setEntries]       = useState([]);   // ordenadas: mais recente primeiro
-  const [index, setIndex]           = useState(0);    // entry atual
-  const [loading, setLoading]       = useState(true);
+const ParentStudentCadernetaView = ({ student, turmasMap, onBack }) => {
+  const [entriesByTurma, setEntriesByTurma] = useState({}); // turmaId -> entries
+  const [selectedTurmaId, setSelectedTurmaId] = useState(null);
+  const [index, setIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  /* Carrega todo o histórico do aluno, ordenado por data desc */
+  // Carrega histórico de cadernetas por turma
   useEffect(() => {
     if (!db || !student?.id) { setLoading(false); return; }
 
-    (async () => {
-      try {
+    const turmaIds = Array.isArray(student.turmaIds) && student.turmaIds.length > 0
+      ? student.turmaIds
+      : student.turmaId ? [student.turmaId] : [];
+
+    if (turmaIds.length === 0) { setLoading(false); return; }
+
+    Promise.all(
+      turmaIds.map(async (turmaId) => {
         const snap = await getDocs(
           query(
             collection(db, 'cadernetaEntries'),
             where('studentId', '==', student.id),
+            where('turmaId', '==', turmaId),
             orderBy('date', 'desc')
           )
         );
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setEntries(list);
-
-        // Inicia no dia de hoje se existir, senão no mais recente
-        const todayIdx = list.findIndex((e) => isToday(e.date));
-        setIndex(todayIdx >= 0 ? todayIdx : 0);
-      } catch {
-        setEntries([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+        return { turmaId, entries: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+      })
+    ).then((results) => {
+      const map = {};
+      results.forEach(({ turmaId, entries }) => { map[turmaId] = entries; });
+      setEntriesByTurma(map);
+      // Seleciona a primeira turma por padrão
+      setSelectedTurmaId(turmaIds[0]);
+      setIndex(0);
+      setLoading(false);
+    });
   }, [student?.id]);
 
+  const entries = selectedTurmaId ? entriesByTurma[selectedTurmaId] || [] : [];
   const entry    = entries[index] ?? null;
   const formData = entry?.data ?? null;
   const absent   = entry?.isAbsent ?? false;
 
-  const canPrev = index < entries.length - 1;  // mais antigo
-  const canNext = index > 0;                   // mais recente
+  const canPrev = index < entries.length - 1;
+  const canNext = index > 0;
 
   return (
     <div className="flex flex-col gap-4 max-w-4xl mx-auto p-4 lg:p-8">
@@ -108,23 +116,34 @@ const ParentStudentCadernetaView = ({ student, turmaNome, onBack }) => {
 
         {/* Identidade do aluno */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:text-primary transition-colors bg-white shrink-0"
-          >
-            <ArrowLeft size={20} />
-          </button>
-
-          <div className="w-12 h-12 rounded-full bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-            {student.fotoUrl
-              ? <img src={student.fotoUrl} alt={student.nome} className="w-full h-full object-cover" />
-              : <span className="text-lg font-bold text-slate-400">{student.nome?.charAt(0)?.toUpperCase()}</span>
-            }
-          </div>
 
           <div>
-            <div className="text-xs font-medium text-slate-500 uppercase tracking-widest">{turmaNome}</div>
-            <div className="font-bold text-lg text-slate-800">{student.nome}</div>
+            <button
+              onClick={onBack}
+              className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:text-primary transition-colors bg-white shrink-0"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          </div>
+
+          <div className='flex-1'>
+            <div className='flex flex-col items-center'>
+              <div className="font-bold text-lg text-slate-800">{student.nome}</div>
+              {/* Se múltiplas turmas, mostra seleção */}
+              {Array.isArray(student.turmaIds) && student.turmaIds.length > 1 ? (
+                <select
+                  className="text-xs font-medium text-slate-500 uppercase tracking-widest bg-transparent border-none outline-none"
+                  value={selectedTurmaId || ''}
+                  onChange={e => { setSelectedTurmaId(e.target.value); setIndex(0); }}
+                >
+                  {student.turmaIds.map((tid) => (
+                    <option key={tid} value={tid}>{turmasMap?.[tid] || 'Turma não informada'}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-xs font-medium text-slate-500 uppercase tracking-widest">{turmasMap?.[selectedTurmaId] || 'Turma não informada'}</div>
+              )}
+            </div>
           </div>
         </div>
 

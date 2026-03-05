@@ -231,7 +231,7 @@ export default function AdminCalendarView() {
           className="h-9 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors inline-flex items-center gap-1"
         >
           {mostrarFormEvento ? <X size={14} /> : <Plus size={14} />}
-          {mostrarFormEvento ? 'Cancelar' : 'Novo evento'}
+          <span className='hidden md:block'>{mostrarFormEvento ? 'Cancelar' : 'Novo evento'}</span>
         </button>
       </div>
 

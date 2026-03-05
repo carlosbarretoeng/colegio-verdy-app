@@ -137,12 +137,12 @@ export default function AdminMerendaView() {
                     <ChevronLeft size={16} />
                 </button>
 
-                <div className="text-center">
-                    <span className="text-sm font-semibold text-slate-800">{formatWeekRange(semana)}</span>
+                <div className="text-center flex flex-col">
+                    <div className="text-sm font-semibold text-slate-800">{formatWeekRange(semana)}</div>
                     {isCurrentWeek && (
-                        <span className="ml-2 text-[11px] font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                        <div className="ml-2 text-[11px] font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
                             Semana atual
-                        </span>
+                        </div>
                     )}
                 </div>
 

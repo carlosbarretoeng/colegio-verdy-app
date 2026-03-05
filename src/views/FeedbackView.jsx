@@ -39,18 +39,27 @@ export default function FeedbackView() {
 
     // Carrega histórico do usuário em tempo real
     useEffect(() => {
-        if (!db || !currentUser?.uid) return;
-        const q = query(
-            collection(db, 'feedback'),
-            where('uid', '==', currentUser.uid),
-            orderBy('criadoEm', 'desc'),
-        );
+        if (!db) return;
+        let q;
+        if (userRole === 'admin') {
+            q = query(
+                collection(db, 'feedback'),
+                orderBy('criadoEm', 'desc'),
+            );
+        } else {
+            if (!currentUser?.uid) return;
+            q = query(
+                collection(db, 'feedback'),
+                where('uid', '==', currentUser.uid),
+                orderBy('criadoEm', 'desc'),
+            );
+        }
         const unsub = onSnapshot(q, (snap) => {
             setHistorico(snap.docs.map(d => ({ id: d.id, ...d.data() })));
             setCarregando(false);
         }, () => setCarregando(false));
         return () => unsub();
-    }, [currentUser?.uid]);
+    }, [db, currentUser?.uid, userRole]);
 
     const adicionarImagens = (files) => {
         const novas = Array.from(files).filter(f => {

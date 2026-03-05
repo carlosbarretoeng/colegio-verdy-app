@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { useAuth } from '../contexts/AuthContext';
 import { CalendarVisualization } from './CalendarioView';
 import ParentStudentCadernetaView from './ParentStudentCadernetaView';
 import { BookOpen, ChevronRight, Clock } from 'lucide-react';
@@ -12,37 +12,52 @@ const statusConfig = {
   pending: { label: 'Aguardando',       className: 'bg-slate-50 text-slate-500 border-slate-200' },
 };
 
-const StudentCard = ({ student, turmaNome, cadernetaStatus, onClick }) => {
+const StudentCard = ({ student, turmasMap, cadernetaStatus, onClick }) => {
   const cfg = statusConfig[cadernetaStatus] ?? statusConfig.pending;
+  let turmasNomes = '';
+  if (Array.isArray(student.turmaIds) && student.turmaIds.length > 0) {
+    turmasNomes = student.turmaIds.map((id) => turmasMap?.[id] || 'Turma não informada').join(', ');
+  } else {
+    turmasNomes = turmasMap?.[student.turmaId] || 'Turma não informada';
+  }
 
   return (
     <button
       onClick={onClick}
-      className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center gap-4 hover:border-primary/40 hover:shadow-md transition-all text-left"
+      className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex-col items-center gap-4 hover:border-primary/40 hover:shadow-md transition-all text-left"
     >
-      <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-        {student.fotoUrl
-          ? <img src={student.fotoUrl} alt={student.nome} className="w-full h-full object-cover" />
-          : <span className="text-lg font-bold text-slate-400">{student.nome?.charAt(0)?.toUpperCase()}</span>
-        }
+      <div className='flex gap-2'>
+        <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+          {student.fotoUrl
+            ? <img src={student.fotoUrl} alt={student.nome} className="w-full h-full object-cover" />
+            : <span className="text-lg font-bold text-slate-400">{student.nome?.charAt(0)?.toUpperCase()}</span>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-slate-800 truncate">{student.nome}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{turmasNomes}</p>
+        </div>
       </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-slate-800 truncate">{student.nome}</p>
-        <p className="text-sm text-slate-500 mt-0.5">{turmaNome || 'Turma não informada'}</p>
-      </div>
-
-      <div className="flex items-center gap-2 shrink-0">
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${cfg.className}`}>
+      <div className="flex items-center w-auto">
+        <div className={`text-xs font-semibold mx-auto my-2 px-2.5 py-1 rounded-full border ${cfg.className}`}>
           {cfg.label}
-        </span>
-        <ChevronRight size={16} className="text-slate-400" />
+        </div>
       </div>
     </button>
   );
 };
 
 const ParentDashboardView = () => {
+    // Detecta mudança de tab para garantir retorno ao início
+    const [activeTab, setActiveTab] = useState('parent-inicio');
+    useEffect(() => {
+      // Detecta se existe variável global de controle de tab
+      if (window && window.__verdytab) setActiveTab(window.__verdytab);
+    }, []);
+    useEffect(() => {
+      // Sempre que mudar para o início, reseta selectedStudent
+      if (activeTab === 'parent-inicio' && selectedStudent) setSelectedStudent(null);
+    }, [activeTab]);
   const { currentUser, userProfile } = useAuth();
 
   const [students, setStudents]         = useState([]);
@@ -80,7 +95,14 @@ const ParentDashboardView = () => {
   useEffect(() => {
     if (!db || students.length === 0) { setTurmasMap({}); return undefined; }
 
-    const turmaIds = [...new Set(students.map((s) => s.turmaId).filter(Boolean))];
+    // Coleta todos os IDs de turmas (array e legado)
+    const turmaIds = [
+      ...new Set(
+        students
+          .flatMap((s) => Array.isArray(s.turmaIds) ? s.turmaIds : [s.turmaId])
+          .filter(Boolean)
+      )
+    ];
     if (turmaIds.length === 0) return undefined;
 
     const q = query(collection(db, 'classrooms'), where('__name__', 'in', turmaIds));
@@ -128,7 +150,7 @@ const ParentDashboardView = () => {
     return (
       <ParentStudentCadernetaView
         student={selectedStudent}
-        turmaNome={turmasMap[selectedStudent.turmaId]}
+        turmasMap={turmasMap}
         onBack={() => setSelectedStudent(null)}
       />
     );
@@ -183,7 +205,7 @@ const ParentDashboardView = () => {
               <StudentCard
                 key={student.id}
                 student={student}
-                turmaNome={turmasMap[student.turmaId]}
+                turmasMap={turmasMap}
                 cadernetaStatus={todayEntries[student.id] || 'pending'}
                 onClick={() => setSelectedStudent(student)}
               />
