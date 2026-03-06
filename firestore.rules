@@ -43,7 +43,7 @@ service cloud.firestore {
     }
 
     match /classrooms/{classroomId} {
-      allow read: if isAdmin() || (isTeacher() && resource.data.professorId == request.auth.uid) || isParent();
+      allow read: if isAdmin() || (isTeacher() && request.auth.uid in resource.data.professoresIds) || isParent();
       allow write: if isAdmin();
     }
 

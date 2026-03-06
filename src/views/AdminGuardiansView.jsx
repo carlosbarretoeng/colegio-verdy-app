@@ -15,7 +15,7 @@ import {
 import { app, auth, db, functions } from '../config/firebase';
 
 const ITEMS_PER_PAGE = 5;
-const EMPTY_FORM = { nome: '', email: '', telefone: '', avatarUrl: '' };
+const EMPTY_FORM = { nome: '', email: '', telefone: '', avatarUrl: '', senha: '' };
 
 async function loadFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -118,7 +118,8 @@ export default function AdminGuardiansView() {
       nome: responsavel.nomeRaw ?? responsavel.nome,
       email: responsavel.email || '',
       telefone: maskTelefone(responsavel.telefone || ''),
-      avatarUrl: responsavel.avatarUrl || ''
+      avatarUrl: responsavel.avatarUrl || '',
+      senha: ''
     });
     setMostrarFormResponsavel(true);
   };
@@ -140,6 +141,7 @@ export default function AdminGuardiansView() {
       const email = formResponsavel.email.trim().toLowerCase();
       const telefone = formResponsavel.telefone.trim();
       const avatarUrl = formResponsavel.avatarUrl.trim();
+      const senha = formResponsavel.senha;
       if (!nome) {
         setSalvandoResponsavel(false);
         return;
@@ -154,11 +156,14 @@ export default function AdminGuardiansView() {
           if (!app || !auth) throw new Error('Firebase não configurado para cadastro de responsável.');
 
           const createParentAccount = httpsCallable(functions, 'createParentAccount');
-          const result = await createParentAccount({ nome, email, telefone, avatarUrl });
-          const responsavelEmail = result?.data?.email || email;
-
-          await sendPasswordResetEmail(auth, responsavelEmail);
-          setFeedback({ tipo: 'sucesso', mensagem: 'Responsável cadastrado e link para criação de senha enviado por e-mail.' });
+          const result = await createParentAccount({ nome, email, telefone, avatarUrl, senha });
+          if (!senha) {
+            const responsavelEmail = result?.data?.email || email;
+            await sendPasswordResetEmail(auth, responsavelEmail);
+            setFeedback({ tipo: 'sucesso', mensagem: 'Responsável cadastrado e link para criação de senha enviado por e-mail.' });
+          } else {
+            setFeedback({ tipo: 'sucesso', mensagem: 'Responsável cadastrado com senha definida.' });
+          }
         } else {
           if (!db) throw new Error('Banco de dados não configurado.');
 
@@ -287,6 +292,19 @@ export default function AdminGuardiansView() {
               </div>
             </div>
 
+            <label className="flex flex-col gap-1 text-sm text-slate-600 md:col-span-2">
+              Senha
+              <input
+                type="password"
+                value={formResponsavel.senha}
+                onChange={e => setFormResponsavel(prev => ({ ...prev, senha: e.target.value }))}
+                placeholder="Defina uma senha (opcional)"
+                className="form-control !py-2.5"
+                minLength={6}
+                autoComplete="new-password"
+              />
+              <span className="text-xs text-slate-400">Se não preenchido, o responsável receberá e-mail para criar a senha.</span>
+            </label>
             <button type="submit" disabled={salvandoResponsavel} className="h-10 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors self-end disabled:opacity-60">
               {responsavelEmEdicaoId ? 'Salvar edição' : 'Salvar responsável'}
             </button>

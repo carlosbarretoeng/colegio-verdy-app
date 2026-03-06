@@ -62,19 +62,27 @@ function MainApp() {
 
         setLoadingTeacherData(true);
 
-        const classroomsQuery = query(collection(db, 'classrooms'), where('professorId', '==', currentUser.uid));
+        const classroomsQuery = query(collection(db, 'classrooms'), where('professoresIds', 'array-contains', currentUser.uid));
         const unsubscribeClassrooms = onSnapshot(classroomsQuery, (snapshot) => {
+            console.log('[DEBUG classroomsQuery]', {
+                uid: currentUser.uid,
+                count: snapshot.size,
+                ids: snapshot.docs.map(d => d.id),
+                data: snapshot.docs.map(d => d.data())
+            });
             const lista = snapshot.docs.map((item) => {
                 const data = item.data();
                 return {
                     id: item.id,
                     nome: data.nome || 'Sem nome',
                     periodo: data.periodo || '',
+                    status: data.status || 'inativa',
                 };
             }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
             setTeacherClassrooms(lista);
-        }, () => {
+        }, (err) => {
+            console.error('[DEBUG classroomsQuery ERROR]', err);
             setTeacherClassrooms([]);
         });
 
@@ -220,6 +228,7 @@ function MainApp() {
                     turmas={teacherClassrooms}
                     studentsStatus={studentsStatus}
                     carregando={loadingTeacherData}
+                    uidLogado={currentUser?.uid || ''}
                 />
             );
         }
@@ -249,6 +258,7 @@ function MainApp() {
                 turmas={teacherClassrooms}
                 studentsStatus={studentsStatus}
                 carregando={loadingTeacherData}
+                uidLogado={currentUser?.uid || ''}
             />
         ); // Fallback
     };

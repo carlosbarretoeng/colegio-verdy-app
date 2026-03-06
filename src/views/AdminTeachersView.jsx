@@ -15,7 +15,7 @@ import {
 import { app, auth, db, functions } from '../config/firebase';
 
 const ITEMS_PER_PAGE = 5;
-const EMPTY_FORM = { nome: '', disciplina: '', email: '', telefone: '', avatarUrl: '' };
+const EMPTY_FORM = { nome: '', disciplina: '', email: '', telefone: '', avatarUrl: '', senha: '', username: '' };
 
 async function loadFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -128,7 +128,9 @@ export default function AdminTeachersView() {
       disciplina: professor.disciplina,
       email: professor.email || '',
       telefone: maskTelefone(professor.telefone || ''),
-      avatarUrl: professor.avatarUrl || ''
+      avatarUrl: professor.avatarUrl || '',
+      senha: '',
+      username: professor.username || ''
     });
     setMostrarFormProfessor(true);
   };
@@ -148,29 +150,32 @@ export default function AdminTeachersView() {
 
       const nome = formProfessor.nome.trim();
       const disciplina = formProfessor.disciplina.trim();
-      const email = formProfessor.email.trim().toLowerCase();
+      let email = formProfessor.email.trim().toLowerCase();
       const telefone = formProfessor.telefone.trim();
       const avatarUrl = formProfessor.avatarUrl.trim();
+      const senha = formProfessor.senha;
+      const username = formProfessor.username.trim();
+      // Se não informar email, gera um padrão
+      if (!email && username) {
+        email = `${username}@usuario.verdy.app`;
+      }
       if (!nome) {
         setSalvandoProfessor(false);
         return;
       }
-      if (!professorEmEdicaoId && !email) {
-        setSalvandoProfessor(false);
-        return;
-      }
+      // E-mail não é mais obrigatório
 
       try {
         if (!professorEmEdicaoId) {
           if (!app || !auth) throw new Error('Firebase não configurado para cadastro de professor.');
 
           const createTeacherAccount = httpsCallable(functions, 'createTeacherAccount');
-          const result = await createTeacherAccount({ nome, email, disciplina, telefone, avatarUrl });
-          const professorEmail = result?.data?.email || email;
-
-          await sendPasswordResetEmail(auth, professorEmail);
-
-          setFeedback({ tipo: 'sucesso', mensagem: 'Professor cadastrado e link para criação de senha enviado por e-mail.' });
+          // Só envia o campo email se preenchido
+          const payload = { nome, disciplina, telefone, avatarUrl, senha };
+          if (email) payload.email = email;
+          if (username) payload.username = username;
+          const result = await createTeacherAccount(payload);
+          setFeedback({ tipo: 'sucesso', mensagem: 'Professor cadastrado com sucesso.' });
         } else {
           if (!db) throw new Error('Banco de dados não configurado.');
 
@@ -284,13 +289,28 @@ export default function AdminTeachersView() {
 
               <div className='col-span-5'>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1 md:col-span-2 text-sm text-slate-600">
+                    Username
+                    <input
+                      type="text"
+                      value={formProfessor.username}
+                      onChange={e => setFormProfessor(prev => ({ ...prev, username: e.target.value }))}
+                      placeholder="Username do professor"
+                      className="form-control !py-2.5"
+                      minLength={3}
+                      autoComplete="username"
+                      required
+                      disabled={Boolean(professorEmEdicaoId)}
+                    />
+                    <span className="text-xs text-slate-400">Obrigatório. Deve ser único para cada professor.</span>
+                  </label>
                   <label className="flex flex-col md:col-span-2 gap-1 text-sm text-slate-600">
                     Nome completo
                     <input value={formProfessor.nome} onChange={(event) => setFormProfessor((prev) => ({ ...prev, nome: event.target.value }))} placeholder="Nome completo" className="form-control !py-2.5" required />
                   </label>
                   <label className="flex flex-col gap-1 md:col-span-2 text-sm text-slate-600">
                     E-mail
-                    <input type="email" value={formProfessor.email} onChange={(event) => setFormProfessor((prev) => ({ ...prev, email: event.target.value }))} placeholder="E-mail" className="form-control !py-2.5" required disabled={Boolean(professorEmEdicaoId)} />
+                    <input type="email" value={formProfessor.email} onChange={(event) => setFormProfessor((prev) => ({ ...prev, email: event.target.value }))} placeholder="E-mail (opcional)" className="form-control !py-2.5" disabled={Boolean(professorEmEdicaoId)} />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-slate-600">
                     Disciplina
@@ -304,6 +324,19 @@ export default function AdminTeachersView() {
               </div>
             </div>
 
+            <label className="flex flex-col gap-1 text-sm text-slate-600 md:col-span-2">
+              Senha
+              <input
+                type="password"
+                value={formProfessor.senha}
+                onChange={e => setFormProfessor(prev => ({ ...prev, senha: e.target.value }))}
+                placeholder="Defina uma senha (opcional)"
+                className="form-control !py-2.5"
+                minLength={6}
+                autoComplete="new-password"
+              />
+              <span className="text-xs text-slate-400">Se não preenchido, o professor receberá e-mail para criar a senha.</span>
+            </label>
             <button type="submit" disabled={salvandoProfessor} className="h-10 px-3 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary-dark transition-colors self-end disabled:opacity-60">
               {professorEmEdicaoId ? 'Salvar edição' : 'Salvar professor'}
             </button>

@@ -3,7 +3,6 @@ import {getAuth} from "firebase-admin/auth";
 import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {setGlobalOptions} from "firebase-functions";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
-import {randomUUID} from "crypto";
 
 setGlobalOptions({maxInstances: 10});
 
@@ -114,17 +113,23 @@ export const createTeacherAccount = onCall(async (request) => {
     disciplina?: unknown;
     telefone?: unknown;
     avatarUrl?: unknown;
+    senha?: unknown;
+    username?: unknown;
   };
 
   const nome = typeof data.nome === "string" ? data.nome.trim() : "";
-  const email =
-    typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
-  const disciplina =
-    typeof data.disciplina === "string" ? data.disciplina.trim() : "";
-  const telefone =
-    typeof data.telefone === "string" ? data.telefone.trim() : "";
-  const inputAvatarUrl =
-    typeof data.avatarUrl === "string" ? data.avatarUrl.trim() : "";
+  const email = typeof data.email === "string" ?
+    data.email.trim().toLowerCase() : "";
+  const disciplina = typeof data.disciplina === "string" ?
+    data.disciplina.trim() : "";
+  const telefone = typeof data.telefone === "string" ?
+    data.telefone.trim() : "";
+  const inputAvatarUrl = typeof data.avatarUrl === "string" ?
+    data.avatarUrl.trim() : "";
+  const senha = typeof data.senha === "string" && data.senha.length >= 6 ?
+    data.senha : "colegioverdy";
+  const username = typeof data.username === "string" ?
+    data.username.trim() : "";
 
   if (!nome) {
     throw new HttpsError("invalid-argument", "Nome é obrigatório.");
@@ -140,16 +145,18 @@ export const createTeacherAccount = onCall(async (request) => {
   try {
     userRecord = await auth.getUserByEmail(email);
     alreadyExists = true;
+    // Se senha foi informada na edição, atualiza
+    if (typeof data.senha === "string" && data.senha.length >= 6) {
+      await auth.updateUser(userRecord.uid, {password: data.senha});
+    }
   } catch (error) {
     const authError = error as {code?: string};
     if (authError.code !== "auth/user-not-found") {
       throw new HttpsError("internal", "Falha ao validar usuário no Auth.");
     }
-
-    const temporaryPassword = `${randomUUID()}Aa1!`;
     userRecord = await auth.createUser({
       email,
-      password: temporaryPassword,
+      password: senha,
       displayName: nome,
     });
   }
@@ -200,8 +207,11 @@ export const createTeacherAccount = onCall(async (request) => {
     await userRef.set(baseTeacherUser, {merge: true});
   }
 
-  const username = await resolveUniqueUsername(db, nome, userRecord.uid);
-  await db.collection("usernames").doc(username).set({
+  let finalUsername = username;
+  if (!finalUsername) {
+    finalUsername = await resolveUniqueUsername(db, nome, userRecord.uid);
+  }
+  await db.collection("usernames").doc(finalUsername).set({
     email,
     uid: userRecord.uid,
   });
@@ -209,7 +219,7 @@ export const createTeacherAccount = onCall(async (request) => {
   return {
     uid: userRecord.uid,
     email,
-    username,
+    username: finalUsername,
     alreadyExists,
   };
 });
@@ -242,15 +252,19 @@ export const createParentAccount = onCall(async (request) => {
     email?: unknown;
     telefone?: unknown;
     avatarUrl?: unknown;
+    senha?: unknown;
   };
 
-  const nome = typeof data.nome === "string" ? data.nome.trim() : "";
-  const email =
-    typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
-  const telefone =
-    typeof data.telefone === "string" ? data.telefone.trim() : "";
-  const inputAvatarUrl =
-    typeof data.avatarUrl === "string" ? data.avatarUrl.trim() : "";
+  const nome = typeof data.nome === "string" ?
+    data.nome.trim() : "";
+  const email = typeof data.email === "string" ?
+    data.email.trim().toLowerCase() : "";
+  const telefone = typeof data.telefone === "string" ?
+    data.telefone.trim() : "";
+  const inputAvatarUrl = typeof data.avatarUrl === "string" ?
+    data.avatarUrl.trim() : "";
+  const senha = typeof data.senha === "string" && data.senha.length >= 6 ?
+    data.senha : "colegioverdy";
 
   if (!nome) {
     throw new HttpsError("invalid-argument", "Nome é obrigatório.");
@@ -266,16 +280,18 @@ export const createParentAccount = onCall(async (request) => {
   try {
     userRecord = await auth.getUserByEmail(email);
     alreadyExists = true;
+    // Se senha foi informada na edição, atualiza
+    if (typeof data.senha === "string" && data.senha.length >= 6) {
+      await auth.updateUser(userRecord.uid, {password: data.senha});
+    }
   } catch (error) {
     const authError = error as {code?: string};
     if (authError.code !== "auth/user-not-found") {
       throw new HttpsError("internal", "Falha ao validar usuário no Auth.");
     }
-
-    const temporaryPassword = `${randomUUID()}Aa1!`;
     userRecord = await auth.createUser({
       email,
-      password: temporaryPassword,
+      password: senha,
       displayName: nome,
     });
   }
