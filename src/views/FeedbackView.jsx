@@ -41,7 +41,7 @@ export default function FeedbackView() {
     useEffect(() => {
         if (!db) return;
         let q;
-        if (userRole === 'admin') {
+        if ((userRole === 'admin' || userRole === 'root')) {
             q = query(
                 collection(db, 'feedback'),
                 orderBy('criadoEm', 'desc'),

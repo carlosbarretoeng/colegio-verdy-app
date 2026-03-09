@@ -1,12 +1,14 @@
 import React from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { ChevronRight } from 'lucide-react';
 import { CalendarVisualization } from './CalendarioView';
 
-const TeacherDashboard = ({ onOpenTurma, turmas = [], studentsStatus = {}, carregando = false, uidLogado = '' }) => {
+const TeacherDashboard = ({ onOpenTurma, turmas = [], studentsStatus = {}, carregando = false, uidLogado }) => {
+    const { activeUserProfile } = useAuth();
+    // Se uidLogado não for passado, usa o do usuário ativo (real ou simulado)
+    const uid = uidLogado || activeUserProfile?.uid;
     // Filtra turmas ativas
     const turmasAtivas = turmas.filter(t => t.status == 'ativa');
-
-    console.log(turmas, turmasAtivas)
 
     return (
         <>

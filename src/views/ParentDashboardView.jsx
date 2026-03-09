@@ -58,7 +58,7 @@ const ParentDashboardView = () => {
       // Sempre que mudar para o início, reseta selectedStudent
       if (activeTab === 'parent-inicio' && selectedStudent) setSelectedStudent(null);
     }, [activeTab]);
-  const { currentUser, userProfile } = useAuth();
+  const { activeUserProfile } = useAuth();
 
   const [students, setStudents]         = useState([]);
   const [turmasMap, setTurmasMap]       = useState({}); // turmaId → nome
@@ -66,7 +66,7 @@ const ParentDashboardView = () => {
   const [loading, setLoading]           = useState(true);
   const [selectedStudent, setSelectedStudent] = useState(null); // student selecionado para ver caderneta
 
-  const uid = currentUser?.uid;
+  const uid = activeUserProfile?.uid;
 
   // 1. Alunos vinculados a este responsável
   useEffect(() => {
@@ -143,7 +143,7 @@ const ParentDashboardView = () => {
     return () => unsubscribers.forEach((u) => u());
   }, [students]);
 
-  const nomePrimeiro = userProfile?.nome?.split(' ')[0] || 'Responsável';
+  const nomePrimeiro = activeUserProfile?.nome?.split(' ')[0] || 'Responsável';
 
   // Navega para a view de caderneta de um aluno específico
   if (selectedStudent) {

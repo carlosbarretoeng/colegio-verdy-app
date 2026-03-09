@@ -6,7 +6,9 @@ const DiarioClasseView = ({ turma, onBack, onOpenStudent, studentsStatus }) => {
 
     // Filtra estudantes da turma mockada (Idealmente os deents viriam nas props integradas à Turma)
     // Como é MVP UI, garantimos que listamos as chaves iteráveis em `studentsStatus`
-    const studentsList = Object.values(studentsStatus).filter(s => s.turmaId === turma.id);
+    const studentsList = Object.values(studentsStatus)
+        .filter(s => s.turmaId === turma.id)
+        .sort((a, b) => a.name.localeCompare(b.name));
 
     const filteredList = studentsList.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
 

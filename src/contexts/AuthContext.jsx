@@ -7,7 +7,7 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
-const VALID_ROLES = new Set(['teacher', 'parent', 'admin']);
+const VALID_ROLES = new Set(['teacher', 'parent', 'admin', 'root']);
 
 const getNameFromEmail = (email) => {
     const localPart = (email || '').split('@')[0] || 'Usuario';
@@ -49,9 +49,18 @@ async function withRetry(fn, maxAttempts = 3, delayMs = 300) {
 
 export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
-    const [userRole, setUserRole] = useState(null); // 'teacher', 'parent', 'admin'
+    const [userRole, setUserRole] = useState(null); // 'teacher', 'parent', 'admin', 'root'
     const [userProfile, setUserProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Estado para simulação de usuário, persistido no localStorage
+    const [impersonatedUser, setImpersonatedUser] = useState(() => {
+        try {
+            const raw = localStorage.getItem('impersonatedUser');
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    });
     // Guarda os dados do formulário de registro para evitar condição de corrida
     // onde onAuthStateChanged dispara antes da transação e sobrescreve o nome/telefone
     const pendingRegistrationRef = useRef(null);
@@ -336,13 +345,36 @@ export const AuthProvider = ({ children }) => {
         return signOut(auth);
     };
 
+    // Funções de simulação
+    const impersonateUser = (userData) => {
+        setImpersonatedUser(userData);
+        try {
+            localStorage.setItem('impersonatedUser', JSON.stringify(userData));
+        } catch {}
+    };
+    const stopImpersonation = () => {
+        setImpersonatedUser(null);
+        try {
+            localStorage.removeItem('impersonatedUser');
+        } catch {}
+    };
+
+    // Dados do usuário ativo (real ou simulado)
+    const activeUserProfile = impersonatedUser || userProfile;
+    const activeUserRole = impersonatedUser ? impersonatedUser.role : userRole;
+
     const value = {
         currentUser,
         userRole,
         userProfile,
+        impersonatedUser,
+        activeUserProfile,
+        activeUserRole,
         login,
         register,
         logout,
+        impersonateUser,
+        stopImpersonation,
         authError: firebaseConfigError
     };
 

@@ -10,45 +10,50 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
+    function isRoot() {
       return isSignedIn()
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'root';
+    }
+
+    function isAdmin() {
+      return isRoot() || isSignedIn()
              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     function isTeacher() {
-      return isSignedIn()
+      return isRoot() || isSignedIn()
              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
     }
 
     function isParent() {
-      return isSignedIn()
+      return isRoot() || isSignedIn()
              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'parent';
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || (isRoot() || isAdmin());
 
       allow create: if isOwner(userId)
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.role == 'parent'
-                    || isAdmin();
+                    || (isRoot() || isAdmin());
 
       allow update: if isOwner(userId)
                     && request.resource.data.uid == resource.data.uid
                     && request.resource.data.role == resource.data.role
-                    || isAdmin()
+                    || (isRoot() || isAdmin())
                     && request.resource.data.uid == resource.data.uid;
 
       allow delete: if false;
     }
 
     match /classrooms/{classroomId} {
-      allow read: if isAdmin() || (isTeacher() && request.auth.uid in resource.data.professoresIds) || isParent();
-      allow write: if isAdmin();
+      allow read: if (isRoot() || isAdmin()) || (isTeacher() && request.auth.uid in resource.data.professoresIds) || isParent();
+      allow write: if (isRoot() || isAdmin());
     }
 
     match /students/{studentId} {
-      allow read: if isAdmin()
+      allow read: if (isRoot() || isAdmin())
                   || (isTeacher()
                       && resource.data.turmaId is string
                       && exists(/databases/$(database)/documents/classrooms/$(resource.data.turmaId))
@@ -56,19 +61,19 @@ service cloud.firestore {
                   || (isSignedIn()
                       && request.auth.uid in resource.data.responsaveisIds);
 
-      allow update: if isAdmin()
+      allow update: if (isRoot() || isAdmin())
                     || (isTeacher()
                         && resource.data.turmaId is string
                         && exists(/databases/$(database)/documents/classrooms/$(resource.data.turmaId))
                         && get(/databases/$(database)/documents/classrooms/$(resource.data.turmaId)).data.professorId == request.auth.uid
                         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['cadernetaStatus']));
 
-      allow create, delete: if isAdmin();
+      allow create, delete: if (isRoot() || isAdmin());
     }
 
     match /events/{eventId} {
-      allow read: if isAdmin() || isSignedIn();
-      allow write: if isAdmin();
+      allow read: if (isRoot() || isAdmin()) || isSignedIn();
+      allow write: if (isRoot() || isAdmin());
     }
 
     match /usernames/{username} {
@@ -76,18 +81,18 @@ service cloud.firestore {
       allow create: if isSignedIn()
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.email is string;
-      allow update: if isAdmin()
+      allow update: if (isRoot() || isAdmin())
                     || (isSignedIn()
                         && resource.data.uid == request.auth.uid
                         && request.resource.data.uid == request.auth.uid
                         && request.resource.data.email is string);
-      allow delete: if isAdmin();
+      allow delete: if (isRoot() || isAdmin());
     }
 
     match /cadernetaEntries/{entryId} {
-      allow read: if isAdmin() || isTeacher() || isSignedIn();
+      allow read: if (isRoot() || isAdmin()) || isTeacher() || isSignedIn();
       
-      allow create, update: if isAdmin()
+      allow create, update: if (isRoot() || isAdmin())
                             || (isTeacher()
                                 && request.resource.data.turmaId is string
                                 && exists(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId))
@@ -98,18 +103,18 @@ service cloud.firestore {
 
     match /merendaSemanal/{docId} {
       allow read: if isSignedIn();
-      allow create, update: if isAdmin();
+      allow create, update: if (isRoot() || isAdmin());
       allow delete: if false;
     }
 
     match /feedback/{docId} {
       // Qualquer usuário autenticado pode enviar; cada um lê apenas as próprias mensagens; admin lê tudo.
-      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow read: if (isRoot() || isAdmin()) || (isSignedIn() && resource.data.uid == request.auth.uid);
       allow create: if isSignedIn()
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.mensagem is string
                     && request.resource.data.criadoEm == request.time;
-      allow update: if isAdmin(); // apenas admin pode marcar como 'lido'
+      allow update: if (isRoot() || isAdmin()); // apenas admin pode marcar como 'lido'
       allow delete: if false;
     }
 

@@ -1,9 +1,32 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { collection, getDocs, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { CalendarDays, Megaphone, MessageSquare, MessageSquareDashed, School, Users } from 'lucide-react';
-import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export default function AdminDashboardView() {
+  const { activeUserRole, impersonateUser, stopImpersonation, impersonatedUser } = useAuth();
+  const [usuarios, setUsuarios] = useState([]);
+  const [selecionado, setSelecionado] = useState('');
+  const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
+
+  // Carrega usuários para dropdown
+  useEffect(() => {
+    // Carrega usuários se for root OU se estiver simulando (para exibir botão de voltar)
+    if (activeUserRole !== 'root' && !impersonatedUser) return;
+    setCarregandoUsuarios(true);
+    getDocs(collection(db, 'users')).then(snapshot => {
+      const lista = snapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+      }));
+      // Ordena por role (teacher, depois parent), depois por nome
+      const teachers = lista.filter(u => u.role === 'teacher').sort((a, b) => (a.nome || a.username || '').localeCompare(b.nome || b.username || '', 'pt-BR'));
+      const parents = lista.filter(u => u.role === 'parent').sort((a, b) => (a.nome || a.username || '').localeCompare(b.nome || b.username || '', 'pt-BR'));
+      setUsuarios([...teachers, ...parents]);
+      setCarregandoUsuarios(false);
+    }).catch(() => setCarregandoUsuarios(false));
+  }, [activeUserRole, impersonatedUser]);
   const [totalAlunos, setTotalAlunos] = useState(null);
   const [totalTurmasAtivas, setTotalTurmasAtivas] = useState(null);
   const [eventos, setEventos] = useState([]);
@@ -81,6 +104,7 @@ export default function AdminDashboardView() {
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto">
+      
       <div>
         <h2 className="text-2xl font-bold text-slate-800">Dashboard da Administração</h2>
         <p className="text-sm text-slate-500 mt-1">Visão consolidada da operação escolar.</p>

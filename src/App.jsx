@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Calendar, MessageSquare, BookOpen, LogOut, User, School, Users, ChevronDown, Menu, X, UtensilsCrossed, Lightbulb } from 'lucide-react';
-import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { Toaster } from 'react-hot-toast';
 
 import TeacherDashboard from './views/TeacherDashboard';
@@ -24,7 +24,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { db } from './config/firebase';
 
 function MainApp() {
-    const { currentUser, userRole, userProfile, logout } = useAuth();
+    const { currentUser, activeUserRole, userProfile, logout, impersonateUser, stopImpersonation, impersonatedUser } = useAuth();
 
     const [activeTab, setActiveTab] = useState('caderneta'); // 'caderneta', 'calendario', 'comunicacao'
 
@@ -38,21 +38,42 @@ function MainApp() {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState(() => (navigator.onLine ? 'online' : 'offline'));
+    const [selecionado, setSelecionado] = useState('');
+    const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
+    const [usuarios, setUsuarios] = useState([]);
     // userMenuRef removido – fechamento via backdrop
     const syncTimeoutRef = useRef(null);
 
-    useEffect(() => {
-        if (userRole === 'admin' && !activeTab.startsWith('admin-') && activeTab !== 'perfil') {
-            setActiveTab('admin-dashboard');
-        }
-        if (userRole === 'parent' && !['parent-inicio', 'calendario', 'comunicacao', 'merenda', 'vale-dev', 'perfil'].includes(activeTab)) {
-            setActiveTab('parent-inicio');
-        }
-    }, [userRole, activeTab]);
 
     useEffect(() => {
-        if (!db || userRole !== 'teacher' || !currentUser?.uid) {
-            if (userRole !== 'teacher') {
+        // Carrega usuários se for root OU se estiver simulando (para exibir botão de voltar)
+        if (activeUserRole !== 'root' && !impersonatedUser) return;
+        setCarregandoUsuarios(true);
+        getDocs(collection(db, 'users')).then(snapshot => {
+          const lista = snapshot.docs.map(doc => ({
+            uid: doc.id,
+            ...doc.data()
+          }));
+          // Ordena por role (teacher, depois parent), depois por nome
+          const teachers = lista.filter(u => u.role === 'teacher').sort((a, b) => (a.nome || a.username || '').localeCompare(b.nome || b.username || '', 'pt-BR'));
+          const parents = lista.filter(u => u.role === 'parent').sort((a, b) => (a.nome || a.username || '').localeCompare(b.nome || b.username || '', 'pt-BR'));
+          setUsuarios([...teachers, ...parents]);
+          setCarregandoUsuarios(false);
+        }).catch(() => setCarregandoUsuarios(false));
+      }, [activeUserRole, impersonatedUser]);
+
+    useEffect(() => {
+        if ((activeUserRole === 'admin' || activeUserRole === 'root') && !activeTab.startsWith('admin-') && activeTab !== 'perfil') {
+            setActiveTab('admin-dashboard');
+        }
+        if (activeUserRole === 'parent' && !['parent-inicio', 'calendario', 'comunicacao', 'merenda', 'vale-dev', 'perfil'].includes(activeTab)) {
+            setActiveTab('parent-inicio');
+        }
+    }, [activeUserRole, activeTab]);
+
+    useEffect(() => {
+        if (!db || activeUserRole !== 'teacher' || !currentUser?.uid) {
+            if (activeUserRole !== 'teacher') {
                 setTeacherClassrooms([]);
                 setStudentsStatus({});
             }
@@ -62,14 +83,8 @@ function MainApp() {
 
         setLoadingTeacherData(true);
 
-        const classroomsQuery = query(collection(db, 'classrooms'), where('professoresIds', 'array-contains', currentUser.uid));
+        const classroomsQuery = query(collection(db, 'classrooms'), where('professoresIds', 'array-contains', impersonatedUser?.uid || currentUser.uid));
         const unsubscribeClassrooms = onSnapshot(classroomsQuery, (snapshot) => {
-            console.log('[DEBUG classroomsQuery]', {
-                uid: currentUser.uid,
-                count: snapshot.size,
-                ids: snapshot.docs.map(d => d.id),
-                data: snapshot.docs.map(d => d.data())
-            });
             const lista = snapshot.docs.map((item) => {
                 const data = item.data();
                 return {
@@ -80,7 +95,7 @@ function MainApp() {
                 };
             }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
-            setTeacherClassrooms(lista);
+                                        setTeacherClassrooms(lista);
         }, (err) => {
             console.error('[DEBUG classroomsQuery ERROR]', err);
             setTeacherClassrooms([]);
@@ -89,50 +104,48 @@ function MainApp() {
         return () => {
             unsubscribeClassrooms();
         };
-    }, [userRole, currentUser?.uid]);
+    }, [activeUserRole, impersonatedUser?.uid || currentUser?.uid]);
 
     // Listener separado para students - ativado quando turmas mudarem
     useEffect(() => {
-        if (!db || userRole !== 'teacher' || teacherClassrooms.length === 0) {
+        if (!db || activeUserRole !== 'teacher' || teacherClassrooms.length === 0) {
             setStudentsStatus({});
             setLoadingTeacherData(false);
             return () => { };
         }
-
         const turmaIds = teacherClassrooms.map(t => t.id);
-        
-        // Usar query com 'in' para filtrar students apenas das turmas do professor
-        const studentsQuery = query(collection(db, 'students'), where('turmaId', 'in', turmaIds));
-        
-        const unsubscribeStudents = onSnapshot(studentsQuery, (snapshot) => {
-            const mapa = {};
-
-            snapshot.docs.forEach((item) => {
-                const data = item.data();
-                mapa[item.id] = {
-                    id: item.id,
-                    turmaId: data.turmaId || '',
-                    name: data.nome || 'Sem nome',
-                    status: 'pending', // Status padrão será atualizado pelo listener de cadernetaEntries
-                    avatar: data.fotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome || 'Aluno')}&background=e2e8f0&color=0f172a`
-                };
+        const unsubscribes = [];
+        const mapa = {};
+        turmaIds.forEach(turmaId => {
+            const studentsQuery = query(collection(db, 'students'), where('turmaIds', 'array-contains', turmaId));
+            const unsubscribe = onSnapshot(studentsQuery, (snapshot) => {
+                snapshot.docs.forEach((item) => {
+                    const data = item.data();
+                    mapa[item.id] = {
+                        id: item.id,
+                        turmaId: turmaId || '',
+                        name: data.nome || 'Sem nome',
+                        status: 'pending', // Status padrão será atualizado pelo listener de cadernetaEntries
+                        avatar: data.fotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome || 'Aluno')}&background=e2e8f0&color=0f172a`
+                    };
+                });
+                setStudentsStatus(mapa);
+                setLoadingTeacherData(false);
+            }, (error) => {
+                setStudentsStatus(mapa);
+                setLoadingTeacherData(false);
             });
-
-            setStudentsStatus(mapa);
-            setLoadingTeacherData(false);
-        }, (error) => {
-            setStudentsStatus({});
-            setLoadingTeacherData(false);
+            unsubscribes.push(unsubscribe);
         });
 
         return () => {
-            unsubscribeStudents();
+            unsubscribes.forEach(unsub => unsub());
         };
-    }, [userRole, teacherClassrooms, db]);
+    }, [activeUserRole, teacherClassrooms, db]);
 
     // Listener para cadernetas do dia para atualizar status dos alunos
     useEffect(() => {
-        if (!db || userRole !== 'teacher' || teacherClassrooms.length === 0) {
+        if (!db || activeUserRole !== 'teacher' || teacherClassrooms.length === 0) {
             return () => { };
         }
 
@@ -170,7 +183,7 @@ function MainApp() {
         return () => {
             unsubscribeCadernetas();
         };
-    }, [userRole, teacherClassrooms, db]);
+    }, [activeUserRole, teacherClassrooms, db]);
 
     // Fechamento do menu via backdrop – evita conflito de ref duplo (mobile/desktop)
 
@@ -228,7 +241,7 @@ function MainApp() {
                     turmas={teacherClassrooms}
                     studentsStatus={studentsStatus}
                     carregando={loadingTeacherData}
-                    uidLogado={currentUser?.uid || ''}
+                    uidLogado={impersonatedUser?.uid || currentUser?.uid || ''}
                 />
             );
         }
@@ -258,7 +271,7 @@ function MainApp() {
                 turmas={teacherClassrooms}
                 studentsStatus={studentsStatus}
                 carregando={loadingTeacherData}
-                uidLogado={currentUser?.uid || ''}
+                uidLogado={impersonatedUser?.uid || currentUser?.uid || ''}
             />
         ); // Fallback
     };
@@ -269,7 +282,7 @@ function MainApp() {
         if (activeTab === 'vale-dev') return <FeedbackView />;
 
         // Roteamento baseado no Role (Perfil)
-        if (userRole === 'admin') {
+        if ((activeUserRole === 'admin' || activeUserRole === 'root')) {
             if (activeTab === 'admin-dashboard') return <AdminDashboardView />;
             if (activeTab === 'admin-calendar') return <AdminCalendarView />;
             if (activeTab === 'admin-professores') return <AdminTeachersView />;
@@ -281,7 +294,7 @@ function MainApp() {
             return <AdminStudentsView />;
         }
 
-        if (userRole === 'parent') {
+        if (activeUserRole === 'parent') {
             if (activeTab === 'calendario') return <CalendarioView />;
             if (activeTab === 'comunicacao') return <ComunicacaoView />;
             if (activeTab === 'merenda') return <MerendaView />;
@@ -314,12 +327,12 @@ function MainApp() {
 
     // O Label do menu muda dependendo da role
     const getNavLabel = () => {
-        if (userRole === 'admin') return 'Visão Geral';
-        if (userRole === 'parent') return 'Início';
+        if ((activeUserRole === 'admin' || activeUserRole === 'root')) return 'Visão Geral';
+        if (activeUserRole === 'parent') return 'Início';
         return 'Dashboard';
     };
 
-    const navItems = userRole === 'admin'
+    const navItems = (activeUserRole === 'admin' || activeUserRole === 'root')
         ? [
             { id: 'admin-dashboard', label: 'Dashboard', icon: Calendar },
             { id: 'admin-calendar', label: 'Calendário', icon: Calendar },
@@ -330,7 +343,7 @@ function MainApp() {
             { id: 'admin-merenda', label: 'Cardápio', icon: UtensilsCrossed },
             { id: 'vale-dev', label: 'Sugestões', icon: Lightbulb },
         ]
-        : userRole === 'parent'
+        : activeUserRole === 'parent'
             ? [
                 { id: 'parent-inicio', label: getNavLabel(), icon: BookOpen },
                 { id: 'comunicacao', label: 'Mensagens', icon: MessageSquare },
@@ -344,8 +357,8 @@ function MainApp() {
             { id: 'vale-dev', label: 'Sugestões', icon: Lightbulb },
             ];
 
-    const userDisplayName = userProfile?.nome || currentUser?.displayName || 'Usuário';
-    const userDisplayEmail = userProfile?.email || currentUser?.email || '';
+    const userDisplayName = userProfile?.nome || impersonatedUser?.displayName || currentUser?.displayName || 'Usuário';
+    const userDisplayEmail = userProfile?.email || impersonateUser?.email || currentUser?.email || '';
     const userAvatar = userProfile?.avatarUrl || '';
 
     const connectionConfig = connectionStatus === 'offline'
@@ -484,6 +497,71 @@ function MainApp() {
                 {/* Desktop Topbar */}
                 <header className="hidden lg:flex h-20 items-center justify-between px-8 bg-white border-b border-slate-200 shrink-0">
                     <div className="flex ml-auto items-center gap-6">
+
+
+                        {/* Dropdown de simulação para root */}
+                        {(activeUserRole === 'root' || impersonatedUser) && (
+                        <div className="">
+                            <div className="flex items-center gap-3">
+                            {!impersonatedUser && (
+                                <>
+                            <span className="font-semibold text-slate-700">Simular:</span>
+                            <select
+                                className="border rounded px-2 py-1"
+                                value={selecionado}
+                                onChange={e => setSelecionado(e.target.value)}
+                                disabled={carregandoUsuarios}
+                            >
+                                <option value="">Selecione um usuário...</option>
+                                {/* Professores */}
+                                {usuarios.filter(u => u.role === 'teacher').length > 0 && (
+                                <optgroup label="Professores">
+                                    {usuarios.filter(u => u.role === 'teacher').map(u => (
+                                    <option key={u.uid} value={u.uid} style={{ color: '#2563eb', fontWeight: 'bold' }}>
+                                        👨‍🏫 {u.nome || u.username || u.email}
+                                    </option>
+                                    ))}
+                                </optgroup>
+                                )}
+                                {/* Responsáveis */}
+                                {usuarios.filter(u => u.role === 'parent').length > 0 && (
+                                <optgroup label="Responsáveis">
+                                    {usuarios.filter(u => u.role === 'parent').map(u => (
+                                    <option key={u.uid} value={u.uid} style={{ color: '#059669', fontWeight: 'bold' }}>
+                                        👨‍👩‍👧‍👦 {u.nome || u.username || u.email}
+                                    </option>
+                                    ))}
+                                </optgroup>
+                                )}
+                            </select>
+                            <button
+                                className="ml-2 px-3 py-1 bg-primary text-white rounded disabled:opacity-50"
+                                disabled={!selecionado || carregandoUsuarios}
+                                onClick={() => {
+                                const user = usuarios.find(u => u.uid === selecionado);
+                                if (user) {
+                                    impersonateUser(user);
+                                    // Força atualização de rota/tab para refletir o novo perfil
+                                    window.location.reload();
+                                }
+                                }}
+                            >Simular</button></>)}
+                            {impersonatedUser && (
+                                <button
+                                className="ml-2 px-3 py-1 bg-slate-400 text-white rounded"
+                                onClick={stopImpersonation}
+                                >Voltar ao usuário root</button>
+                            )}
+                            </div>
+                            {impersonatedUser && (
+                            <div className="mt-2 text-sm text-orange-600 font-semibold">
+                                Modo simulação ativo: {impersonatedUser.nome || impersonatedUser.username || impersonatedUser.email}
+                            </div>
+                            )}
+                        </div>
+                        )}
+
+
                         <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${connectionConfig.className}`}>
                             <span className={`w-2 h-2 rounded-full ${connectionConfig.dotClassName}`} />
                             {connectionConfig.label}
