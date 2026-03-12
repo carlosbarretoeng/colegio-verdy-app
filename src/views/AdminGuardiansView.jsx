@@ -152,10 +152,10 @@ export default function AdminGuardiansView() {
       }
 
       try {
+        const createParentAccount = httpsCallable(functions, 'createParentAccount');
         if (!responsavelEmEdicaoId) {
           if (!app || !auth) throw new Error('Firebase não configurado para cadastro de responsável.');
 
-          const createParentAccount = httpsCallable(functions, 'createParentAccount');
           const result = await createParentAccount({ nome, email, telefone, avatarUrl, senha });
           if (!senha) {
             const responsavelEmail = result?.data?.email || email;
@@ -165,6 +165,11 @@ export default function AdminGuardiansView() {
             setFeedback({ tipo: 'sucesso', mensagem: 'Responsável cadastrado com senha definida.' });
           }
         } else {
+          // Se senha foi informada, atualiza também no Auth
+          if (senha && senha.length >= 6) {
+            await createParentAccount({ nome, email, telefone, avatarUrl, senha });
+            setFeedback({ tipo: 'sucesso', mensagem: 'Senha do responsável atualizada com sucesso.' });
+          }
           if (!db) throw new Error('Banco de dados não configurado.');
 
           await updateDoc(doc(db, 'users', responsavelEmEdicaoId), {
@@ -174,7 +179,9 @@ export default function AdminGuardiansView() {
             updatedAt: serverTimestamp()
           });
 
-          setFeedback({ tipo: 'sucesso', mensagem: 'Dados do responsável atualizados com sucesso.' });
+          if (!(senha && senha.length >= 6)) {
+            setFeedback({ tipo: 'sucesso', mensagem: 'Dados do responsável atualizados com sucesso.' });
+          }
         }
 
         setPagina(1);

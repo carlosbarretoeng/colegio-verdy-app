@@ -35,14 +35,11 @@ service cloud.firestore {
 
       allow create: if isOwner(userId)
                     && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.role == 'parent'
                     || (isRoot() || isAdmin());
 
       allow update: if isOwner(userId)
                     && request.resource.data.uid == resource.data.uid
-                    && request.resource.data.role == resource.data.role
-                    || (isRoot() || isAdmin())
-                    && request.resource.data.uid == resource.data.uid;
+                    || (isRoot() || isAdmin());
 
       allow delete: if false;
     }
@@ -92,11 +89,11 @@ service cloud.firestore {
     match /cadernetaEntries/{entryId} {
       allow read: if (isRoot() || isAdmin()) || isTeacher() || isSignedIn();
       
-      allow create, update: if (isRoot() || isAdmin())
-                            || (isTeacher()
-                                && request.resource.data.turmaId is string
-                                && exists(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId))
-                                && get(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId)).data.professorId == request.auth.uid);
+      allow create, update: if (isRoot() || isAdmin()) || isTeacher();
+                            // || (isTeacher();
+                                // && request.resource.data.turmaId is string
+                                // && exists(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId))
+                                // && get(/databases/$(database)/documents/classrooms/$(request.resource.data.turmaId)).data.professorId == request.auth.uid);
       
       allow delete: if false;
     }

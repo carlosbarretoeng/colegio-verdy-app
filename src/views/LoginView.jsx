@@ -96,7 +96,7 @@ const LoginView = () => {
                         {isLogin ? (
                             <>
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Usuário ou E-mail</label>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Usuário</label>
                                     <div className="relative">
                                         <input
                                             type="text"
